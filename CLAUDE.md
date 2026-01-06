@@ -74,6 +74,29 @@ This project uses bd (beads) for issue tracking:
 - Run `bd ready` to see available work
 - Run `bd list --parent claude-go-tvd` to see all project beads
 
+## JSONL Format Gotchas
+
+The JSONL format has quirks that affect parsing:
+
+| Message Type | Where It Lives | Notes |
+|--------------|----------------|-------|
+| `user` | Text in `message.content` string or array | Normal user messages |
+| `assistant` | Array of content blocks | May contain `text`, `tool_use`, `thinking` |
+| `tool_result` | **User message** with `tool_result` content | NOT in assistant message — it's a "user" type with tool_result blocks |
+| `summary` | Separate entry, `type: "summary"` | Session title metadata, not conversation content |
+| `thinking` | Inside assistant content | Encrypted, should be filtered out |
+
+**Key insight:** Tool results come back as user messages, not assistant messages. The flow is:
+1. Assistant sends `tool_use` block
+2. System sends `tool_result` as a user message
+3. Assistant continues with text
+
+## Systemd Gotchas
+
+**KillMode matters:** The service uses `KillMode=process` to only kill the Node.js process on restart, not tmux children. Without this, `systemctl restart claude-go` kills all active Claude sessions.
+
+**PATH:** Claude CLI lives in `~/.local/bin/`, which isn't in systemd's default PATH. The service file explicitly includes it.
+
 ## Related
 
 - `~/Repos/claude-code-web/` - Previous ttyd-based solution
