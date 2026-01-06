@@ -299,19 +299,16 @@ function renderMessage(msg) {
     } else if (typeof msg.content === 'string') {
       content = renderMarkdown(msg.content);
     }
-  } else if (msg.type === 'local_command') {
-    // Local command: render command on right, output on left
-    const commandHtml = `
-      <div class="message user" data-uuid="${msg.uuid}-cmd">
-        <div class="content">${escapeHtml(msg.command)}</div>
+  } else if (msg.type === 'hidden') {
+    // Hide caveat messages
+    return '';
+  } else if (msg.type === 'local_command_output') {
+    // Local command output: render as assistant-style response
+    return `
+      <div class="message assistant local-command-output" data-uuid="${msg.uuid}">
+        <div class="content"><pre>${escapeHtml(msg.content)}</pre></div>
       </div>
     `;
-    const outputHtml = msg.output ? `
-      <div class="message assistant local-command-output" data-uuid="${msg.uuid}-out">
-        <div class="content"><pre>${escapeHtml(msg.output)}</pre></div>
-      </div>
-    ` : '';
-    return commandHtml + outputHtml;
   } else if (msg.type === 'summary') {
     content = `<em>${escapeHtml(msg.content)}</em>`;
   }
