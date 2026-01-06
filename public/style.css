@@ -400,6 +400,32 @@ button {
   margin-bottom: var(--space-sm);
 }
 
+/* Tool result display */
+.tool-result {
+  background: var(--bg-tertiary);
+  border-left: 3px solid var(--success);
+  padding: var(--space-md);
+  margin: var(--space-md) 0;
+  border-radius: 0 var(--border-radius) var(--border-radius) 0;
+}
+
+.tool-result .tool-result-header {
+  font-weight: 500;
+  color: var(--success);
+  margin-bottom: var(--space-sm);
+  font-size: var(--font-size-sm);
+}
+
+.tool-result pre {
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.tool-result pre code {
+  font-size: 12px;
+}
+
 /* ==========================================================================
    Input Area
    ========================================================================== */

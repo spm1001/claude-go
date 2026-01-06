@@ -264,6 +264,16 @@ function renderMessage(msg) {
               <pre><code class="language-json">${escapeHtml(JSON.stringify(block.input, null, 2))}</code></pre>
             </div>
           `;
+        } else if (block.type === 'tool_result') {
+          const resultContent = typeof block.content === 'string'
+            ? block.content
+            : JSON.stringify(block.content, null, 2);
+          return `
+            <div class="tool-result">
+              <div class="tool-result-header">Result</div>
+              <pre><code>${escapeHtml(resultContent)}</code></pre>
+            </div>
+          `;
         }
         return '';
       }).join('');
