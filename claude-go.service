@@ -9,6 +9,7 @@ WorkingDirectory=/home/modha/Repos/claude-go
 Environment=NODE_ENV=production
 Environment=PORT=7682
 Environment=HOME=/home/modha
+Environment=PATH=/home/modha/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=CLAUDE_PROJECTS_DIR=/home/modha/.claude/projects
 Environment=REPOS_DIR=/home/modha/Repos
 ExecStart=/usr/bin/node server.js
