@@ -325,6 +325,16 @@ button {
   margin-bottom: 0;
 }
 
+.message .content ol,
+.message .content ul {
+  padding-left: 1.5em;
+  margin-bottom: var(--space-md);
+}
+
+.message .content li {
+  margin-bottom: var(--space-sm);
+}
+
 .message .content code {
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);

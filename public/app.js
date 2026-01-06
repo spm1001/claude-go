@@ -269,6 +269,11 @@ function renderMessage(msg) {
     content = `<em>${escapeHtml(msg.content)}</em>`;
   }
 
+  // Skip empty messages
+  if (!content.trim()) {
+    return '';
+  }
+
   return `
     <div class="message ${typeClass}" data-uuid="${msg.uuid}">
       <div class="content">${content}</div>
@@ -315,6 +320,15 @@ function scrollToBottom() {
 function handleSend() {
   const text = elements.messageInput.value.trim();
   if (!text) return;
+
+  // Optimistically show user message immediately
+  const tempUuid = `pending-${Date.now()}`;
+  addOrUpdateMessage({
+    uuid: tempUuid,
+    type: 'user',
+    content: text
+  });
+  scrollToBottom();
 
   sendInput(text, null);
   elements.messageInput.value = '';
