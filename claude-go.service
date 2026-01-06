@@ -5,6 +5,7 @@ After=network.target tailscaled.service
 [Service]
 Type=simple
 User=modha
+KillMode=process
 WorkingDirectory=/home/modha/Repos/claude-go
 Environment=NODE_ENV=production
 Environment=PORT=7682
