@@ -121,17 +121,12 @@ header .subtitle {
   margin-left: var(--space-sm);
 }
 
-#session-status.waiting {
+#session-status.connected {
   background: var(--success);
   color: white;
 }
 
-#session-status.processing {
-  background: var(--warning);
-  color: black;
-}
-
-#session-status.error {
+#session-status.disconnected {
   background: var(--error);
   color: white;
 }

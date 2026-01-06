@@ -93,6 +93,7 @@ function connectWebSocket(sessionId) {
   state.ws = new WebSocket(wsUrl);
   state.ws.onopen = () => {
     console.log('WebSocket connected');
+    updateStatus('connected', 'Connected');
     // Start heartbeat
     state.heartbeatInterval = setInterval(() => {
       if (state.ws.readyState === WebSocket.OPEN) {
@@ -109,6 +110,7 @@ function connectWebSocket(sessionId) {
   state.ws.onclose = () => {
     console.log('WebSocket disconnected');
     clearInterval(state.heartbeatInterval);
+    updateStatus('disconnected', 'Disconnected');
   };
 
   state.ws.onerror = (err) => {
@@ -132,8 +134,7 @@ function handleWebSocketMessage(msg) {
       break;
 
     case 'waiting':
-      // Claude is waiting for input
-      updateStatus('waiting', 'Ready');
+      // Claude is waiting for input - show quick actions
       elements.quickActions.classList.remove('hidden');
       break;
 
@@ -216,7 +217,6 @@ async function loadSessionContent(sessionId) {
     }
 
     scrollToBottom();
-    updateStatus('processing', 'Active');
   } catch (err) {
     console.error('Error loading session:', err);
     elements.messagesContainer.innerHTML = '<p class="loading">Error loading conversation</p>';
@@ -370,7 +370,6 @@ function handleSend() {
   elements.messageInput.value = '';
   elements.messageInput.style.height = 'auto';
   elements.quickActions.classList.add('hidden');
-  updateStatus('processing', 'Processing');
 }
 
 function handleAction(action) {
@@ -380,7 +379,6 @@ function handleAction(action) {
     sendInput(null, action);
   }
   elements.quickActions.classList.add('hidden');
-  updateStatus('processing', 'Processing');
 }
 
 // Auto-resize textarea
