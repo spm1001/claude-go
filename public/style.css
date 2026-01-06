@@ -1,0 +1,513 @@
+/**
+ * Claude Go - Mobile-first CSS
+ *
+ * Design principles:
+ * - 48px minimum tap targets
+ * - Readable fonts without zooming
+ * - Dark theme for battery and eye comfort
+ * - Fluid layouts that work on any screen
+ */
+
+:root {
+  /* Colors */
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #252525;
+  --bg-tertiary: #2d2d2d;
+  --text-primary: #e5e5e5;
+  --text-secondary: #a0a0a0;
+  --text-muted: #666;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --border: #333;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+
+  /* Sizing */
+  --tap-target: 48px;
+  --border-radius: 8px;
+  --border-radius-lg: 12px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   Views
+   ========================================================================== */
+
+.view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.view.hidden {
+  display: none;
+}
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
+header {
+  display: flex;
+  align-items: center;
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  min-height: 60px;
+}
+
+header h1 {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+}
+
+header .subtitle {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-xs);
+}
+
+.session-info {
+  flex: 1;
+  text-align: center;
+}
+
+#session-name {
+  font-weight: 500;
+}
+
+#session-status {
+  display: inline-block;
+  font-size: var(--font-size-sm);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: var(--space-sm);
+}
+
+#session-status.waiting {
+  background: var(--success);
+  color: white;
+}
+
+#session-status.processing {
+  background: var(--warning);
+  color: black;
+}
+
+#session-status.error {
+  background: var(--error);
+  color: white;
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+button {
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  transition: all 0.2s ease;
+}
+
+.icon-btn {
+  width: var(--tap-target);
+  height: var(--tap-target);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+  border-radius: var(--border-radius);
+}
+
+.icon-btn:hover, .icon-btn:active {
+  background: var(--bg-tertiary);
+}
+
+.primary-btn {
+  background: var(--accent);
+  color: white;
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--border-radius);
+  font-weight: 500;
+  min-height: var(--tap-target);
+}
+
+.primary-btn:hover {
+  background: var(--accent-hover);
+}
+
+.primary-btn:active {
+  transform: scale(0.98);
+}
+
+.action-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--border-radius);
+  min-height: var(--tap-target);
+  border: 1px solid var(--border);
+}
+
+.action-btn:hover {
+  background: var(--bg-secondary);
+}
+
+/* ==========================================================================
+   Session Picker
+   ========================================================================== */
+
+#session-picker header {
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--space-xl) var(--space-md);
+}
+
+#sessions-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+.session-card {
+  display: flex;
+  align-items: center;
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  margin-bottom: var(--space-md);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  min-height: 72px;
+}
+
+.session-card:hover {
+  border-color: var(--accent);
+}
+
+.session-card .info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.session-card .name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-card .preview {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: var(--space-xs);
+}
+
+.session-card .status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-left: var(--space-md);
+}
+
+.session-card .status-dot.alive {
+  background: var(--success);
+}
+
+.session-card .status-dot.dead {
+  background: var(--text-muted);
+}
+
+.loading {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: var(--space-xl);
+}
+
+#new-session-btn {
+  margin: var(--space-md);
+  width: calc(100% - var(--space-md) * 2);
+}
+
+/* ==========================================================================
+   Chat View
+   ========================================================================== */
+
+#messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md);
+  scroll-behavior: smooth;
+}
+
+.message {
+  margin-bottom: var(--space-lg);
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.message.user {
+  text-align: right;
+}
+
+.message.user .content {
+  display: inline-block;
+  background: var(--accent);
+  color: white;
+  padding: var(--space-md);
+  border-radius: var(--border-radius-lg);
+  border-bottom-right-radius: var(--space-xs);
+  max-width: 85%;
+  text-align: left;
+}
+
+.message.assistant .content {
+  background: var(--bg-secondary);
+  padding: var(--space-md);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--border);
+}
+
+/* Markdown content */
+.message .content p {
+  margin-bottom: var(--space-md);
+}
+
+.message .content p:last-child {
+  margin-bottom: 0;
+}
+
+.message .content code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.message .content pre {
+  position: relative;
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius);
+  margin: var(--space-md) 0;
+  overflow-x: auto;
+}
+
+.message .content pre code {
+  display: block;
+  padding: var(--space-md);
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.copy-btn {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: 4px;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.message .content pre:hover .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  color: var(--text-primary);
+}
+
+/* Tool use display */
+.tool-use {
+  background: var(--bg-tertiary);
+  border-left: 3px solid var(--accent);
+  padding: var(--space-md);
+  margin: var(--space-md) 0;
+  border-radius: 0 var(--border-radius) var(--border-radius) 0;
+}
+
+.tool-use .tool-name {
+  font-weight: 500;
+  color: var(--accent);
+  margin-bottom: var(--space-sm);
+}
+
+/* ==========================================================================
+   Input Area
+   ========================================================================== */
+
+#input-area {
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+}
+
+#quick-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+  flex-wrap: wrap;
+}
+
+#quick-actions.hidden {
+  display: none;
+}
+
+.input-row {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-end;
+}
+
+#message-input {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+  padding: var(--space-md);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  resize: none;
+  min-height: var(--tap-target);
+  max-height: 200px;
+  line-height: 1.4;
+}
+
+#message-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+#send-btn {
+  padding: var(--space-md) var(--space-lg);
+}
+
+/* ==========================================================================
+   Takeover Banner
+   ========================================================================== */
+
+#takeover-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--warning);
+  color: black;
+  padding: var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 100;
+}
+
+#takeover-banner.hidden {
+  display: none;
+}
+
+#take-back-btn {
+  background: black;
+  color: white;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--border-radius);
+}
+
+/* ==========================================================================
+   Desktop Styles
+   ========================================================================== */
+
+@media (min-width: 768px) {
+  #app {
+    max-width: 900px;
+    margin: 0 auto;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  .message.user .content {
+    max-width: 70%;
+  }
+
+  #session-picker header {
+    padding: var(--space-xl) var(--space-lg);
+  }
+}
+
+/* ==========================================================================
+   Utilities
+   ========================================================================== */
+
+.hidden {
+  display: none !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}

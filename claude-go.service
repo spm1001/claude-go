@@ -1,0 +1,19 @@
+[Unit]
+Description=Claude Go - Self-hosted Claude Code web client
+After=network.target tailscaled.service
+
+[Service]
+Type=simple
+User=modha
+WorkingDirectory=/home/modha/Repos/claude-go
+Environment=NODE_ENV=production
+Environment=PORT=7682
+Environment=HOME=/home/modha
+Environment=CLAUDE_PROJECTS_DIR=/home/modha/.claude/projects
+Environment=REPOS_DIR=/home/modha/Repos
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

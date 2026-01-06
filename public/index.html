@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Claude Go</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Marked for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Highlight.js for code syntax highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Session Picker (shown when no session selected) -->
+    <div id="session-picker" class="view">
+      <header>
+        <h1>Claude Go</h1>
+        <p class="subtitle">Your Claude, anywhere</p>
+      </header>
+
+      <div id="sessions-list">
+        <p class="loading">Loading sessions...</p>
+      </div>
+
+      <button id="new-session-btn" class="primary-btn">
+        + New Session
+      </button>
+    </div>
+
+    <!-- Chat View (shown when session selected) -->
+    <div id="chat-view" class="view hidden">
+      <header>
+        <button id="back-btn" class="icon-btn">&larr;</button>
+        <div class="session-info">
+          <span id="session-name">Session</span>
+          <span id="session-status" class="status"></span>
+        </div>
+        <button id="menu-btn" class="icon-btn">&#8942;</button>
+      </header>
+
+      <div id="messages-container">
+        <!-- Messages will be rendered here -->
+      </div>
+
+      <div id="input-area">
+        <div id="quick-actions" class="hidden">
+          <button class="action-btn" data-action="approve">Approve</button>
+          <button class="action-btn" data-action="reject">Reject</button>
+          <button class="action-btn" data-action="interrupt">Stop</button>
+        </div>
+        <div class="input-row">
+          <textarea id="message-input" placeholder="Message Claude..." rows="1"></textarea>
+          <button id="send-btn" class="primary-btn">Send</button>
+        </div>
+      </div>
+
+      <!-- Device takeover banner -->
+      <div id="takeover-banner" class="hidden">
+        <p>Session active on another device</p>
+        <button id="take-back-btn">Take Back</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
