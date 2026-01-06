@@ -209,14 +209,18 @@ async function loadSessionContent(sessionId) {
   state.messages = [];
 
   try {
+    console.log('[DEBUG] Fetching session content for:', sessionId);
     const messages = await fetchSessionContent(sessionId);
+    console.log('[DEBUG] Got messages:', messages.length, messages);
     elements.messagesContainer.innerHTML = '';
 
     for (const msg of messages) {
+      console.log('[DEBUG] Adding message:', msg.type, msg.uuid);
       addOrUpdateMessage(msg);
     }
 
     scrollToBottom();
+    console.log('[DEBUG] Done loading, container innerHTML length:', elements.messagesContainer.innerHTML.length);
   } catch (err) {
     console.error('Error loading session:', err);
     elements.messagesContainer.innerHTML = '<p class="loading">Error loading conversation</p>';
