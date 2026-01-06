@@ -426,6 +426,14 @@ button {
   font-size: 12px;
 }
 
+.tool-result.error {
+  border-left-color: var(--error);
+}
+
+.tool-result.error .tool-result-header {
+  color: var(--error);
+}
+
 /* ==========================================================================
    Input Area
    ========================================================================== */

@@ -251,6 +251,25 @@ function renderMessage(msg) {
 
   if (msg.type === 'user') {
     content = escapeHtml(msg.content || '');
+  } else if (msg.type === 'tool_result_message') {
+    // Tool result messages (rendered like assistant messages)
+    if (Array.isArray(msg.content)) {
+      content = msg.content.map(block => {
+        if (block.type === 'tool_result') {
+          const resultContent = typeof block.content === 'string'
+            ? block.content
+            : JSON.stringify(block.content, null, 2);
+          const errorClass = block.is_error ? ' error' : '';
+          return `
+            <div class="tool-result${errorClass}">
+              <div class="tool-result-header">${block.is_error ? 'Error' : 'Result'}</div>
+              <pre><code>${escapeHtml(resultContent)}</code></pre>
+            </div>
+          `;
+        }
+        return '';
+      }).join('');
+    }
   } else if (msg.type === 'assistant') {
     // Render assistant content (may be array of blocks)
     if (Array.isArray(msg.content)) {
