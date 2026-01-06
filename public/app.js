@@ -356,15 +356,20 @@ function handleSend() {
   const text = elements.messageInput.value.trim();
   if (!text) return;
 
-  // Optimistically show user message immediately (italicised until confirmed)
-  const tempUuid = `pending-${Date.now()}`;
-  addOrUpdateMessage({
-    uuid: tempUuid,
-    type: 'user',
-    content: text,
-    pending: true
-  });
-  scrollToBottom();
+  // Slash commands are terminal-local (don't appear in JSONL), so skip optimistic display
+  const isSlashCommand = text.startsWith('/');
+
+  if (!isSlashCommand) {
+    // Optimistically show user message immediately (italicised until confirmed)
+    const tempUuid = `pending-${Date.now()}`;
+    addOrUpdateMessage({
+      uuid: tempUuid,
+      type: 'user',
+      content: text,
+      pending: true
+    });
+    scrollToBottom();
+  }
 
   sendInput(text, null);
   elements.messageInput.value = '';
