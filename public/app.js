@@ -319,6 +319,9 @@ function renderMessage(msg) {
 function renderMarkdown(text) {
   if (!text) return '';
 
+  // Strip ANSI codes before markdown parsing
+  text = stripAnsi(text);
+
   // Configure marked
   marked.setOptions({
     highlight: (code, lang) => {
@@ -396,9 +399,15 @@ function autoResize(textarea) {
 // Utility Functions
 // =============================================================================
 
+function stripAnsi(text) {
+  // Remove ANSI escape codes (colors, cursor movement, etc.)
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '');
+}
+
 function escapeHtml(text) {
   const div = document.createElement('div');
-  div.textContent = text;
+  div.textContent = stripAnsi(text);
   return div.innerHTML;
 }
 
