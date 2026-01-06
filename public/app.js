@@ -299,6 +299,19 @@ function renderMessage(msg) {
     } else if (typeof msg.content === 'string') {
       content = renderMarkdown(msg.content);
     }
+  } else if (msg.type === 'local_command') {
+    // Local command: render command on right, output on left
+    const commandHtml = `
+      <div class="message user" data-uuid="${msg.uuid}-cmd">
+        <div class="content">${escapeHtml(msg.command)}</div>
+      </div>
+    `;
+    const outputHtml = msg.output ? `
+      <div class="message assistant local-command-output" data-uuid="${msg.uuid}-out">
+        <div class="content"><pre>${escapeHtml(msg.output)}</pre></div>
+      </div>
+    ` : '';
+    return commandHtml + outputHtml;
   } else if (msg.type === 'summary') {
     content = `<em>${escapeHtml(msg.content)}</em>`;
   }
