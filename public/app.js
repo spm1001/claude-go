@@ -121,6 +121,11 @@ function handleWebSocketMessage(msg) {
     case 'messages':
       // New messages from JSONL watcher
       for (const m of msg.data) {
+        // If it's a confirmed user message, remove any pending ones
+        if (m.type === 'user') {
+          document.querySelectorAll('.message.pending').forEach(el => el.remove());
+          state.messages = state.messages.filter(msg => !msg.pending);
+        }
         addOrUpdateMessage(m);
       }
       scrollToBottom();
@@ -274,8 +279,9 @@ function renderMessage(msg) {
     return '';
   }
 
+  const pendingClass = msg.pending ? ' pending' : '';
   return `
-    <div class="message ${typeClass}" data-uuid="${msg.uuid}">
+    <div class="message ${typeClass}${pendingClass}" data-uuid="${msg.uuid}">
       <div class="content">${content}</div>
     </div>
   `;
@@ -321,12 +327,13 @@ function handleSend() {
   const text = elements.messageInput.value.trim();
   if (!text) return;
 
-  // Optimistically show user message immediately
+  // Optimistically show user message immediately (italicised until confirmed)
   const tempUuid = `pending-${Date.now()}`;
   addOrUpdateMessage({
     uuid: tempUuid,
     type: 'user',
-    content: text
+    content: text,
+    pending: true
   });
   scrollToBottom();
 

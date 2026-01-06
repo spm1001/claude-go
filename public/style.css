@@ -309,6 +309,11 @@ button {
   text-align: left;
 }
 
+.message.pending .content {
+  font-style: italic;
+  opacity: 0.7;
+}
+
 .message.assistant .content {
   background: var(--bg-secondary);
   padding: var(--space-md);
