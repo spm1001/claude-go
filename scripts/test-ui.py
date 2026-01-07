@@ -5,13 +5,14 @@ Automated UI testing for Claude Go.
 Usage:
     python scripts/test-ui.py                    # Run all tests
     python scripts/test-ui.py --test multi-question
-    python scripts/test-ui.py --test send-message
+    python scripts/test-ui.py --test button-click
     python scripts/test-ui.py --session <id>    # Use specific session
 """
 import sys
 import time
 import json
 import argparse
+import subprocess
 import requests
 from playwright.sync_api import sync_playwright
 
@@ -226,10 +227,66 @@ def test_exit_plan_mode(tester):
         return False
 
 
+def get_tmux_pane(session_id):
+    """Capture current tmux pane content."""
+    result = subprocess.run(
+        ["tmux", "capture-pane", "-t", f"claude-{session_id}", "-p"],
+        capture_output=True, text=True
+    )
+    return result.stdout
+
+
+def test_button_click(tester):
+    """Test that clicking a real question button sends keystroke to tmux."""
+    print("\n=== TEST: Button Click (End-to-End) ===")
+
+    # Check if there's a real unanswered question
+    questions = tester.page.locator('.ask-user-question:not(.answered)')
+    if questions.count() == 0:
+        print("⚠️  SKIPPED: No real unanswered questions (need live fishbowl)")
+        return True  # Skip, not fail
+
+    q_id = questions.first.get_attribute('data-question-id')
+    print(f"  Found question: {q_id[:30]}...")
+
+    # Check tmux before
+    tmux_before = get_tmux_pane(tester.session_id)
+    has_prompt = "Enter to select" in tmux_before
+    print(f"  Tmux has prompt: {has_prompt}")
+
+    if not has_prompt:
+        print("⚠️  SKIPPED: Tmux not showing selection prompt")
+        return True
+
+    # Click the button
+    option = questions.first.locator('.question-option').first
+    print(f"  Clicking option...")
+    option.click()
+    tester.page.wait_for_timeout(2000)
+
+    # Check tmux after
+    tmux_after = get_tmux_pane(tester.session_id)
+    prompt_gone = "Enter to select" not in tmux_after
+
+    # Check UI
+    updated_q = tester.page.locator(f'[data-question-id="{q_id}"]')
+    is_answered = updated_q.evaluate('el => el.classList.contains("answered")')
+
+    print(f"  UI answered: {is_answered}, Tmux cleared: {prompt_gone}")
+
+    if is_answered and prompt_gone:
+        print("✅ PASSED: Button click sent keystroke to Claude")
+        return True
+    else:
+        print("❌ FAILED: Button click didn't work end-to-end")
+        return False
+
+
 TESTS = {
     'multi-question': test_multi_question,
     'send-message': test_send_message,
     'exit-plan-mode': test_exit_plan_mode,
+    'button-click': test_button_click,
 }
 
 

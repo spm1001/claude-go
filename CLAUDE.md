@@ -176,33 +176,39 @@ tmux send-keys -t claude-$ID -l "text"  # Literal text (use -l flag)
 
 ## Testing Infrastructure
 
+### Scripts
+
+| Script | Purpose | When to Use |
+|--------|---------|-------------|
+| `spinup-fishbowl.sh` | Create sandbox + session | Starting fresh test |
+| `test-ui.py` | Automated tests | CI / regression |
+| `inspect-session.py` | One-shot DOM snapshot | Quick scripting |
+| `explore.py` | Interactive REPL | Manual exploration |
+
+### Commands
+
 ```bash
 # Start dev server
 HOST=127.0.0.1 npm run dev
 
-# Spin up a fishbowl Claude (creates sandbox in ~/Repos to avoid /tmp path issues)
+# Create a fishbowl Claude
 ./scripts/spinup-fishbowl.sh test1
 
-# Inspect DOM state programmatically
-~/.claude/.venv/bin/python scripts/inspect-session.py <session-id>
+# Run all automated tests
+~/.claude/.venv/bin/python scripts/test-ui.py
+
+# Run specific test
+~/.claude/.venv/bin/python scripts/test-ui.py --test button-click
+
+# Quick inspect (one-shot)
 ~/.claude/.venv/bin/python scripts/inspect-session.py --list
+~/.claude/.venv/bin/python scripts/inspect-session.py <session-id>
 
-# Run automated UI tests
-~/.claude/.venv/bin/python scripts/test-ui.py                      # All tests
-~/.claude/.venv/bin/python scripts/test-ui.py --test multi-question
-
-# Exploratory testing REPL
+# Interactive exploration
 ~/.claude/.venv/bin/python scripts/explore.py
-
-# Debug endpoint for JSONL inspection
-curl http://localhost:7682/dev/messages/<session-id>
-
-# Direct tmux interaction
-tmux capture-pane -t claude-<session-id> -p | tail -30   # Check state
-tmux send-keys -t claude-<session-id> "Enter"             # Send Enter
 ```
 
-**Path gotcha:** Don't use `/tmp` for sandboxes — macOS resolves `/tmp` → `/private/tmp`, causing path mismatch. Use `~/Repos/fishbowl-sandboxes/` instead. See `.tvd.15` for the bug.
+**Path note:** `/tmp` now works (symlinks resolved). Sandboxes can be anywhere.
 
 ## Related
 
