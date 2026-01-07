@@ -913,6 +913,12 @@ function submitQuestionAnswer(answer) {
   const questionId = `q-${interaction.tool_use_id}-${interaction.currentIndex}`;
   state.answeredQuestions.add(questionId);
 
+  // Mark the individual inline card as answered immediately
+  const inlineCard = document.querySelector(`[data-question-id="${questionId}"]`);
+  if (inlineCard) {
+    inlineCard.classList.add('answered');
+  }
+
   // Send the answer
   // For typed text (not a number), send directly without 'answer' action
   const isTypedText = isNaN(parseInt(answer, 10));
@@ -989,8 +995,13 @@ function checkForPendingInteractions() {
 
     for (const block of msg.content) {
       if (block.type === 'tool_use' && block.name === 'AskUserQuestion' && block.input?.questions) {
-        const questionId = `q-${block.id}-0`;
-        if (!state.answeredQuestions.has(questionId)) {
+        // Check if ANY question in this block is unanswered
+        const questions = block.input.questions;
+        const hasUnanswered = questions.some((_, idx) =>
+          !state.answeredQuestions.has(`q-${block.id}-${idx}`)
+        );
+
+        if (hasUnanswered) {
           if (!state.currentInteraction || state.currentInteraction.tool_use_id !== block.id) {
             showQuestionInPanel(block.id, block.input.questions);
           }

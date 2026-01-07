@@ -333,6 +333,14 @@ if (process.env.NODE_ENV !== 'production') {
       return res.status(404).json({ error: 'No clients connected to this session' });
     }
 
+    // For permission_request, also add to server-side pendingPermissions store
+    // This allows /hook/pending to return injected permissions for testing
+    if (req.body.type === 'permission_request' && req.body.data) {
+      const permission = req.body.data;
+      pendingPermissions.set(permission.tool_use_id, permission);
+      console.log(`[dev] Added permission to server store: ${permission.tool_use_id}`);
+    }
+
     const message = JSON.stringify(req.body);
     let sent = 0;
     clients.forEach(client => {

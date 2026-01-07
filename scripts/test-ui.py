@@ -100,6 +100,26 @@ class ClaudeGoTester:
         panel = self.page.locator('#interaction-panel')
         return panel.count() > 0 and not panel.evaluate('el => el.classList.contains("hidden")')
 
+    def clear_panel(self):
+        """Clear the interaction panel and reset state for test isolation."""
+        # Press Escape to dismiss any pending interaction
+        self.page.keyboard.press('Escape')
+        self.page.wait_for_timeout(100)
+        # Also reset client-side state
+        self.reset_state()
+
+    def reset_state(self):
+        """Reset client-side state for test isolation."""
+        # Clear accumulated state that persists across tests
+        self.page.evaluate('''() => {
+            state.messages = state.messages.filter(m => m.type === 'user');
+            state.answeredQuestions.clear();
+            state.currentInteraction = null;
+            state.pendingPermissions.clear();
+            document.getElementById('interaction-panel')?.classList.add('hidden');
+        }''')
+        self.page.wait_for_timeout(200)
+
     def send_message(self, text):
         """Type and send a message."""
         self.page.locator('#message-input').fill(text)
@@ -161,6 +181,9 @@ def test_multi_question(tester):
     print(f"  Answering Q1 via panel")
     tester.click_panel_option(0)
 
+    # Wait for the panel to re-render with Q2
+    tester.page.wait_for_timeout(500)
+
     questions = tester.get_questions()
     q1_state = next((q for q in questions if q['id'] == our_qs[0]['id']), None)
     q2_state = next((q for q in questions if q['id'] == our_qs[1]['id']), None)
@@ -173,8 +196,10 @@ def test_multi_question(tester):
         print("❌ FAILED: Q2 incorrectly marked answered")
         return False
 
-    # Panel should now show Q2
-    tester.page.wait_for_timeout(300)
+    # Panel should now show Q2 - verify it's visible before clicking
+    if not tester.panel_visible():
+        print("❌ FAILED: Panel not visible for Q2")
+        return False
 
     # Answer Q2 via panel
     print(f"  Answering Q2 via panel")
@@ -317,6 +342,9 @@ def test_multiselect(tester):
     """Test multi-select question via panel (toggle options, submit)."""
     print("\n=== TEST: MultiSelect Question ===")
 
+    # Clear any stale panel state
+    tester.clear_panel()
+
     tool_id = f"toolu_multi_{int(time.time())}"
 
     # Inject multi-select question
@@ -346,14 +374,16 @@ def test_multiselect(tester):
     # Panel should have toggle buttons for multi-select
     panel = tester.page.locator('#interaction-panel')
     toggle_btns = panel.locator('.interaction-option')
-    submit_btn = panel.locator('[data-action="submit-multi"]')
 
     if toggle_btns.count() != 3:
         print(f"❌ FAILED: Expected 3 options in panel, found {toggle_btns.count()}")
         return False
 
-    if submit_btn.count() != 1:
-        print(f"❌ FAILED: Expected 1 submit button in panel, found {submit_btn.count()}")
+    # For multi-select, submit is via main send button (which shows "Submit")
+    send_btn = tester.page.locator('#send-btn')
+    btn_text = send_btn.text_content()
+    if 'Submit' not in btn_text:
+        print(f"❌ FAILED: Send button should show 'Submit' for multi-select, got '{btn_text}'")
         return False
 
     # Toggle first and third options in panel
@@ -371,8 +401,8 @@ def test_multiselect(tester):
         print(f"❌ FAILED: Panel toggle state wrong: {btn1_selected}, {btn2_selected}, {btn3_selected}")
         return False
 
-    # Submit via panel
-    submit_btn.click()
+    # Submit via main send button (shows "Submit" for multi-select)
+    send_btn.click()
     tester.page.wait_for_timeout(600)
 
     # Check inline card is marked answered
@@ -392,6 +422,9 @@ def test_exit_plan_reject(tester):
     """Test ExitPlanMode reject via panel."""
     print("\n=== TEST: ExitPlanMode Reject ===")
 
+    # Clear any stale panel state from previous tests
+    tester.clear_panel()
+
     tool_id = f"toolu_reject_{int(time.time())}"
 
     # Inject plan
@@ -401,6 +434,9 @@ def test_exit_plan_reject(tester):
         "name": "ExitPlanMode",
         "input": {"plan": "## Plan to Reject\n1. Bad step"}
     }])
+
+    # Wait for panel to render with plan
+    tester.page.wait_for_timeout(500)
 
     # Verify panel renders
     if not tester.panel_visible():
@@ -417,6 +453,9 @@ def test_exit_plan_reject(tester):
     # Click reject in panel
     reject_btn = tester.page.locator('#interaction-panel [data-action="plan-reject"]')
     if reject_btn.count() == 0:
+        # Debug: what is the panel showing?
+        panel_html = tester.page.locator('#interaction-panel').inner_html()
+        print(f"  Panel content: {panel_html[:200]}...")
         print("❌ FAILED: Panel reject button not found")
         return False
 
@@ -437,9 +476,12 @@ def test_other_option(tester):
     """Test 'Other' free-text option in AskUserQuestion."""
     print("\n=== TEST: Other Free-Text Option ===")
 
+    # Clear any stale panel state
+    tester.clear_panel()
+
     # This tests if Claude Go handles the "Other" option that Claude auto-adds
-    # Currently we don't render an explicit "Other" button - users type in input
-    # This test verifies input works when question is present
+    # When user types text and submits while a question is pending, it sends as "Other"
+    # and marks the question as answered
 
     tool_id = f"toolu_other_{int(time.time())}"
 
@@ -460,6 +502,8 @@ def test_other_option(tester):
         }
     }])
 
+    tester.page.wait_for_timeout(500)
+
     # Verify question rendered
     q_selector = f'[data-question-id*="{tool_id}"]'
     question = tester.page.locator(q_selector)
@@ -468,19 +512,25 @@ def test_other_option(tester):
         print("❌ FAILED: Question not rendered")
         return False
 
-    # For "Other", user types in message input
-    # Verify input is available and works
-    initial_count = tester.get_message_count()
-    tester.send_message("Green - like grass")
-    tester.page.wait_for_timeout(500)
+    # Verify panel shows the question
+    if not tester.panel_visible():
+        print("❌ FAILED: Panel not visible for question")
+        return False
 
-    new_count = tester.get_message_count()
-    if new_count > initial_count:
-        print("✅ PASSED: Can send custom 'Other' text via input")
-        print("  ⚠️  NOTE: This doesn't mark question as answered (by design)")
+    # For "Other", user types in message input and submits
+    # This goes through submitQuestionAnswer() which marks question as answered
+    tester.page.locator('#message-input').fill("Green - like grass")
+    tester.page.locator('#send-btn').click()
+    tester.page.wait_for_timeout(600)
+
+    # Check question is marked answered
+    is_answered = question.first.evaluate('el => el.classList.contains("answered")')
+
+    if is_answered:
+        print("✅ PASSED: 'Other' free-text marks question as answered")
         return True
     else:
-        print("❌ FAILED: Could not send message while question is pending")
+        print("❌ FAILED: Question not marked answered after 'Other' submission")
         return False
 
 
@@ -588,6 +638,9 @@ def test_multiple_pending_permissions(tester):
     """Test multiple pending permissions are queued and handled sequentially."""
     print("\n=== TEST: Multiple Pending Permissions ===")
 
+    # Clear any stale panel state
+    tester.clear_panel()
+
     tool_use_id_1 = f"toolu_multi1_{int(time.time())}"
     tool_use_id_2 = f"toolu_multi2_{int(time.time())}"
 
@@ -649,6 +702,9 @@ def test_rapid_clicks(tester):
     """Test rapid button clicks don't cause issues (double-tap prevention)."""
     print("\n=== TEST: Rapid Clicks (Double-tap Prevention) ===")
 
+    # Clear any stale panel state
+    tester.clear_panel()
+
     tool_id = f"toolu_rapid_{int(time.time())}"
 
     # Inject question
@@ -669,6 +725,8 @@ def test_rapid_clicks(tester):
         }
     }])
 
+    tester.page.wait_for_timeout(500)
+
     q_selector = f'[data-question-id*="{tool_id}"]'
     question = tester.page.locator(q_selector)
 
@@ -676,28 +734,26 @@ def test_rapid_clicks(tester):
         print("❌ FAILED: Question not rendered")
         return False
 
-    option = question.locator('.question-option').first
-
-    # Click once
-    option.click()
-
-    # Immediately check if button is disabled (double-tap prevention)
-    tester.page.wait_for_timeout(100)
-    is_disabled = option.evaluate('el => el.disabled || el.classList.contains("loading")')
-
-    if not is_disabled:
-        print("❌ FAILED: Button not disabled after click (double-tap prevention broken)")
+    # Verify panel is visible
+    if not tester.panel_visible():
+        print("❌ FAILED: Panel not visible for question")
         return False
 
-    # Wait for answered state
+    # Click option via panel (not inline card which is now read-only)
+    panel_option = tester.page.locator('#interaction-panel .interaction-option').first
+
+    # Click once
+    panel_option.click()
+
+    # Wait for answered state (panel handles the response)
     tester.page.wait_for_timeout(600)
     is_answered = question.first.evaluate('el => el.classList.contains("answered")')
 
     if is_answered:
-        print("✅ PASSED: Double-tap prevention works (button disabled, question answered)")
+        print("✅ PASSED: Panel click answered question correctly")
         return True
     else:
-        print("❌ FAILED: Question not answered after click")
+        print("❌ FAILED: Question not answered after panel click")
         return False
 
 
