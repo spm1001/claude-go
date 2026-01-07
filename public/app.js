@@ -10,6 +10,35 @@
  */
 
 // =============================================================================
+// Constants
+// =============================================================================
+
+/**
+ * Action names used in data-action attributes.
+ * Centralizes magic strings to prevent typos and enable find-all-references.
+ */
+const ACTIONS = {
+  // Message container actions
+  COPY: 'copy',
+
+  // Inline card actions (rendered but read-only - interactions via panel)
+  INLINE_SELECT: 'select',
+  INLINE_TOGGLE: 'toggle',
+  INLINE_SUBMIT_MULTI: 'submit-multi',
+  INLINE_APPROVE_PLAN: 'approve-plan',
+  INLINE_REJECT_PLAN: 'reject-plan',
+
+  // Panel actions (active - these are clickable)
+  SELECT_OPTION: 'select-option',
+  PERM_APPROVE: 'perm-approve',
+  PERM_ALWAYS: 'perm-always',
+  PERM_DENY: 'perm-deny',
+  PLAN_APPROVE: 'plan-approve',
+  PLAN_REJECT: 'plan-reject',
+  DISMISS: 'dismiss',
+};
+
+// =============================================================================
 // State
 // =============================================================================
 
@@ -28,6 +57,39 @@ const state = {
 
 // Save device ID for persistence across reloads
 localStorage.setItem('deviceId', state.deviceId);
+
+// =============================================================================
+// State/DOM Sync Helpers
+// =============================================================================
+
+/**
+ * Mark a question as answered (updates both state and DOM).
+ * Single source of truth pattern - call this instead of updating separately.
+ */
+function markQuestionAnswered(questionId) {
+  state.answeredQuestions.add(questionId);
+  const card = document.querySelector(`[data-question-id="${questionId}"]`);
+  if (card) card.classList.add('answered');
+}
+
+/**
+ * Mark a plan as answered (updates both state and DOM).
+ */
+function markPlanAnswered(planId) {
+  state.answeredQuestions.add(planId);
+  const card = document.querySelector(`[data-plan-id="${planId}"]`);
+  if (card) card.classList.add('answered');
+}
+
+/**
+ * Mark all questions for a tool_use as answered.
+ * Used when dismissing or completing multi-question flows.
+ */
+function markAllQuestionsAnswered(toolUseId, questionCount) {
+  for (let i = 0; i < questionCount; i++) {
+    markQuestionAnswered(`q-${toolUseId}-${i}`);
+  }
+}
 
 // =============================================================================
 // DOM Elements
@@ -369,8 +431,8 @@ function renderMessage(msg) {
                 <div class="plan-header">Implementation Plan</div>
                 <div class="plan-content">${renderMarkdown(block.input?.plan || '')}</div>
                 <div class="plan-actions">
-                  <button class="plan-btn approve" data-action="approve-plan">Approve</button>
-                  <button class="plan-btn reject" data-action="reject-plan">Reject</button>
+                  <button class="plan-btn approve" data-action="${ACTIONS.INLINE_APPROVE_PLAN}">Approve</button>
+                  <button class="plan-btn reject" data-action="${ACTIONS.INLINE_REJECT_PLAN}">Reject</button>
                 </div>
               </div>
             `;
@@ -388,13 +450,13 @@ function renderMessage(msg) {
                     <div class="question-text">${escapeHtml(q.question)}</div>
                     <div class="question-options multi-select">
                       ${q.options.map((opt, i) => `
-                        <button class="question-option" data-action="toggle" data-index="${i + 1}">
+                        <button class="question-option" data-action="${ACTIONS.INLINE_TOGGLE}" data-index="${i + 1}">
                           <span class="option-label">${escapeHtml(opt.label)}</span>
                           <span class="option-desc">${escapeHtml(opt.description || '')}</span>
                         </button>
                       `).join('')}
                     </div>
-                    <button class="question-submit" data-action="submit-multi">Submit</button>
+                    <button class="question-submit" data-action="${ACTIONS.INLINE_SUBMIT_MULTI}">Submit</button>
                   </div>
                 `;
               } else {
@@ -405,7 +467,7 @@ function renderMessage(msg) {
                     <div class="question-text">${escapeHtml(q.question)}</div>
                     <div class="question-options">
                       ${q.options.map((opt, i) => `
-                        <button class="question-option" data-action="select" data-index="${i + 1}">
+                        <button class="question-option" data-action="${ACTIONS.INLINE_SELECT}" data-index="${i + 1}">
                           <span class="option-label">${escapeHtml(opt.label)}</span>
                           <span class="option-desc">${escapeHtml(opt.description || '')}</span>
                         </button>
@@ -486,7 +548,7 @@ function renderMarkdown(text) {
   let html = marked.parse(text);
 
   // Add copy buttons to pre blocks
-  html = html.replace(/<pre>/g, '<pre><button class="copy-btn" data-action="copy">Copy</button>');
+  html = html.replace(/<pre>/g, `<pre><button class="copy-btn" data-action="${ACTIONS.COPY}">Copy</button>`);
 
   return html;
 }
@@ -521,7 +583,7 @@ function handleSend() {
       return;
     } else if (interaction.type === 'plan' && text) {
       // "Edit..." - send feedback and reject
-      state.answeredQuestions.add(`plan-${interaction.tool_use_id}`);
+      markPlanAnswered(`plan-${interaction.tool_use_id}`);
       sendInput(text, null); // Send feedback as message
       clearInteractionPanel();
       elements.messageInput.value = '';
@@ -736,22 +798,6 @@ function clearInteractionPanel() {
 }
 
 /**
- * Mark inline cards as answered (update DOM directly)
- */
-function markInlineCardAnswered(toolUseId, type) {
-  if (type === 'question') {
-    // Find all question cards for this tool_use_id
-    document.querySelectorAll(`.ask-user-question[data-question-id^="q-${toolUseId}"]`).forEach(el => {
-      el.classList.add('answered');
-    });
-  } else if (type === 'plan') {
-    document.querySelectorAll(`.exit-plan-mode[data-plan-id="plan-${toolUseId}"]`).forEach(el => {
-      el.classList.add('answered');
-    });
-  }
-}
-
-/**
  * Render the interaction panel based on current state
  */
 function renderInteractionPanel() {
@@ -803,7 +849,7 @@ function renderQuestionPanel(interaction) {
       : `<span class="option-number">${index}.</span>`;
 
     return `
-      <button class="interaction-option${selectedClass}" data-action="select-option" data-index="${index}">
+      <button class="interaction-option${selectedClass}" data-action="${ACTIONS.SELECT_OPTION}" data-index="${index}">
         <div>
           ${checkbox}
           <span class="option-label">${escapeHtml(opt.label)}</span>
@@ -842,9 +888,9 @@ function renderPermissionPanel(interaction) {
   // Permission buttons
   elements.interactionOptions.innerHTML = `
     <div class="permission-buttons">
-      <button class="perm-btn approve" data-action="perm-approve">Approve</button>
-      <button class="perm-btn always" data-action="perm-always">Always</button>
-      <button class="perm-btn deny" data-action="perm-deny">Deny</button>
+      <button class="perm-btn approve" data-action="${ACTIONS.PERM_APPROVE}">Approve</button>
+      <button class="perm-btn always" data-action="${ACTIONS.PERM_ALWAYS}">Always</button>
+      <button class="perm-btn deny" data-action="${ACTIONS.PERM_DENY}">Deny</button>
     </div>
   `;
 
@@ -862,8 +908,8 @@ function renderPlanPanel(interaction) {
 
   elements.interactionOptions.innerHTML = `
     <div class="permission-buttons">
-      <button class="perm-btn approve" data-action="plan-approve">Approve</button>
-      <button class="perm-btn deny" data-action="plan-reject">Reject</button>
+      <button class="perm-btn approve" data-action="${ACTIONS.PLAN_APPROVE}">Approve</button>
+      <button class="perm-btn deny" data-action="${ACTIONS.PLAN_REJECT}">Reject</button>
     </div>
   `;
 
@@ -909,15 +955,9 @@ function submitQuestionAnswer(answer) {
     answer = selected.join(',');
   }
 
-  // Mark question as answered
+  // Mark question as answered (updates both state and DOM)
   const questionId = `q-${interaction.tool_use_id}-${interaction.currentIndex}`;
-  state.answeredQuestions.add(questionId);
-
-  // Mark the individual inline card as answered immediately
-  const inlineCard = document.querySelector(`[data-question-id="${questionId}"]`);
-  if (inlineCard) {
-    inlineCard.classList.add('answered');
-  }
+  markQuestionAnswered(questionId);
 
   // Send the answer
   // For typed text (not a number), send directly without 'answer' action
@@ -935,8 +975,6 @@ function submitQuestionAnswer(answer) {
 
   // Move to next question or finish
   if (isLastQuestion) {
-    // Mark all inline cards for this question as answered
-    markInlineCardAnswered(interaction.tool_use_id, 'question');
     clearInteractionPanel();
   } else {
     interaction.currentIndex++;
@@ -957,15 +995,11 @@ function handleDismiss() {
     state.ws.send(JSON.stringify({ type: 'escape' }));
   }
 
-  // Mark as answered and update inline cards
+  // Mark as answered (wrapper updates both state and DOM)
   if (interaction.type === 'question') {
-    for (let i = 0; i < interaction.questions.length; i++) {
-      state.answeredQuestions.add(`q-${interaction.tool_use_id}-${i}`);
-    }
-    markInlineCardAnswered(interaction.tool_use_id, 'question');
+    markAllQuestionsAnswered(interaction.tool_use_id, interaction.questions.length);
   } else if (interaction.type === 'plan') {
-    state.answeredQuestions.add(`plan-${interaction.tool_use_id}`);
-    markInlineCardAnswered(interaction.tool_use_id, 'plan');
+    markPlanAnswered(`plan-${interaction.tool_use_id}`);
   } else if (interaction.type === 'permission') {
     // Remove from pending permissions
     state.pendingPermissions.delete(interaction.tool_use_id);
@@ -1066,7 +1100,7 @@ elements.messagesContainer.addEventListener('click', (e) => {
   const target = e.target;
 
   // Copy button
-  const copyBtn = target.closest('[data-action="copy"]');
+  const copyBtn = target.closest(`[data-action="${ACTIONS.COPY}"]`);
   if (copyBtn) {
     const pre = copyBtn.parentElement;
     const code = pre.querySelector('code');
@@ -1086,13 +1120,13 @@ elements.interactionPanel?.addEventListener('click', (e) => {
   const target = e.target;
 
   // Dismiss button
-  if (target.closest('[data-action="dismiss"]')) {
+  if (target.closest(`[data-action="${ACTIONS.DISMISS}"]`)) {
     handleDismiss();
     return;
   }
 
   // Question option select
-  const optionBtn = target.closest('[data-action="select-option"]');
+  const optionBtn = target.closest(`[data-action="${ACTIONS.SELECT_OPTION}"]`);
   if (optionBtn) {
     const index = parseInt(optionBtn.dataset.index, 10);
     handleOptionSelect(index);
@@ -1100,7 +1134,7 @@ elements.interactionPanel?.addEventListener('click', (e) => {
   }
 
   // Permission approve
-  if (target.closest('[data-action="perm-approve"]')) {
+  if (target.closest(`[data-action="${ACTIONS.PERM_APPROVE}"]`)) {
     const interaction = state.currentInteraction;
     if (interaction?.type === 'permission') {
       respondToPermission(interaction.tool_use_id, interaction.session_id, true);
@@ -1110,7 +1144,7 @@ elements.interactionPanel?.addEventListener('click', (e) => {
   }
 
   // Permission always
-  if (target.closest('[data-action="perm-always"]')) {
+  if (target.closest(`[data-action="${ACTIONS.PERM_ALWAYS}"]`)) {
     const interaction = state.currentInteraction;
     if (interaction?.type === 'permission') {
       // Send "3" for always trust (just number + Enter, no Tab)
@@ -1122,7 +1156,7 @@ elements.interactionPanel?.addEventListener('click', (e) => {
   }
 
   // Permission deny
-  if (target.closest('[data-action="perm-deny"]')) {
+  if (target.closest(`[data-action="${ACTIONS.PERM_DENY}"]`)) {
     const interaction = state.currentInteraction;
     if (interaction?.type === 'permission') {
       respondToPermission(interaction.tool_use_id, interaction.session_id, false);
@@ -1132,11 +1166,10 @@ elements.interactionPanel?.addEventListener('click', (e) => {
   }
 
   // Plan approve
-  if (target.closest('[data-action="plan-approve"]')) {
+  if (target.closest(`[data-action="${ACTIONS.PLAN_APPROVE}"]`)) {
     const interaction = state.currentInteraction;
     if (interaction?.type === 'plan') {
-      state.answeredQuestions.add(`plan-${interaction.tool_use_id}`);
-      markInlineCardAnswered(interaction.tool_use_id, 'plan');
+      markPlanAnswered(`plan-${interaction.tool_use_id}`);
       sendInput('y', null);
       clearInteractionPanel();
     }
@@ -1144,11 +1177,10 @@ elements.interactionPanel?.addEventListener('click', (e) => {
   }
 
   // Plan reject
-  if (target.closest('[data-action="plan-reject"]')) {
+  if (target.closest(`[data-action="${ACTIONS.PLAN_REJECT}"]`)) {
     const interaction = state.currentInteraction;
     if (interaction?.type === 'plan') {
-      state.answeredQuestions.add(`plan-${interaction.tool_use_id}`);
-      markInlineCardAnswered(interaction.tool_use_id, 'plan');
+      markPlanAnswered(`plan-${interaction.tool_use_id}`);
       sendInput('n', null);
       clearInteractionPanel();
     }
