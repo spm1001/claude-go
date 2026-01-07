@@ -142,6 +142,21 @@ Mobile UI tap → server sends: tmux send-keys "1" Enter
 }
 ```
 
+**Tools with inline UI rendering skip the hook.** The hook script checks `tool_name` and exits early for `AskUserQuestion` and `TodoWrite` — these have proper inline rendering in the web UI and shouldn't show permission cards.
+
+## Permission Denial Debugging
+
+**Denial sends Escape key.** When user taps Deny, server calls `sendKeys(session_id, 'Escape')` which sends to tmux. This cancels the permission prompt.
+
+**Debug endpoint:** `GET /api/sessions/:id/terminal` returns raw `tmux capture-pane` output. Use the ▦ button in the UI header to open it. Essential for seeing what the terminal is actually waiting for.
+
+**Stale permissions bug:** If server restarts, pending permissions in UI aren't cleared. User may deny a card that points to a dead session. The keystroke goes nowhere. (See `.6f4`)
+
+**Timing edge cases:** Denial works reliably when tested, but one early test showed a file created despite deny being logged. Couldn't reproduce. If investigating:
+1. Check `journalctl -u claude-go` for `sendKeys: BEFORE/AFTER` logs
+2. Check terminal state at time of denial (was prompt actually showing?)
+3. Check if user was in the right session
+
 ## Interaction Grammar
 
 **Use the API, not raw keystrokes.** The grammar is encoded in `lib/sessions.js`:
