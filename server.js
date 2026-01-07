@@ -9,6 +9,7 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
+const chokidar = require('chokidar');
 
 // Configuration
 const PORT = process.env.PORT || 7682;
@@ -28,6 +29,29 @@ const wss = new WebSocket.Server({ server });
 // Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// =============================================================================
+// Development: Hot Reload
+// =============================================================================
+
+if (process.env.NODE_ENV !== 'production') {
+  const publicWatcher = chokidar.watch(path.join(__dirname, 'public'), {
+    persistent: true,
+    ignoreInitial: true
+  });
+
+  publicWatcher.on('change', (filePath) => {
+    console.log(`[hot-reload] File changed: ${path.relative(__dirname, filePath)}`);
+    // Broadcast reload to all connected clients
+    wss.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({ type: 'reload' }));
+      }
+    });
+  });
+
+  console.log('[hot-reload] Watching public/ for changes');
+}
 
 // Track connected clients per session
 const sessionClients = new Map(); // sessionId -> Set<WebSocket>
@@ -265,6 +289,37 @@ app.get('/hook/pending', (req, res) => {
 
   res.json(permissions);
 });
+
+// =============================================================================
+// Development Endpoints
+// =============================================================================
+
+if (process.env.NODE_ENV !== 'production') {
+  /**
+   * POST /dev/inject/:sessionId
+   * Inject mock WebSocket messages for testing without real Claude sessions
+   */
+  app.post('/dev/inject/:sessionId', (req, res) => {
+    const { sessionId } = req.params;
+    const clients = sessionClients.get(sessionId);
+
+    if (!clients || clients.size === 0) {
+      return res.status(404).json({ error: 'No clients connected to this session' });
+    }
+
+    const message = JSON.stringify(req.body);
+    let sent = 0;
+    clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+        sent++;
+      }
+    });
+
+    console.log(`[dev] Injected message to ${sent} client(s) for session ${sessionId}`);
+    res.json({ ok: true, clientCount: sent });
+  });
+}
 
 // =============================================================================
 // WebSocket Handling

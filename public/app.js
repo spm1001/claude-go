@@ -21,7 +21,8 @@ const state = {
   heartbeatInterval: null,
   pendingPermissions: new Map(), // tool_use_id -> permission data
   answeredQuestions: new Set(),  // question IDs that have been answered
-  respondingPermissions: new Set() // permission IDs with in-flight responses
+  respondingPermissions: new Set(), // permission IDs with in-flight responses
+  loadingQuestions: new Set() // question IDs with in-flight responses (for loading state)
 };
 
 // Save device ID for persistence across reloads
@@ -145,6 +146,12 @@ function handleWebSocketMessage(msg) {
         addOrUpdateMessage(m);
       }
       scrollToBottom();
+      break;
+
+    case 'reload':
+      // Hot reload triggered by server (dev mode)
+      console.log('[hot-reload] Reloading page...');
+      location.reload();
       break;
 
     case 'waiting':
@@ -302,6 +309,21 @@ function renderMessage(msg) {
         if (block.type === 'text') {
           return renderMarkdown(block.text);
         } else if (block.type === 'tool_use') {
+          // Special rendering for ExitPlanMode
+          if (block.name === 'ExitPlanMode') {
+            const planId = `plan-${block.id}`;
+            const answeredClass = state.answeredQuestions.has(planId) ? ' answered' : '';
+            return `
+              <div class="exit-plan-mode${answeredClass}" data-plan-id="${planId}">
+                <div class="plan-header">Implementation Plan</div>
+                <div class="plan-content">${renderMarkdown(block.input?.plan || '')}</div>
+                <div class="plan-actions">
+                  <button class="plan-btn approve" data-action="approve-plan">Approve</button>
+                  <button class="plan-btn reject" data-action="reject-plan">Reject</button>
+                </div>
+              </div>
+            `;
+          }
           // Special rendering for AskUserQuestion
           if (block.name === 'AskUserQuestion' && block.input?.questions) {
             return block.input.questions.map((q, qIdx) => {
@@ -660,15 +682,24 @@ elements.messagesContainer.addEventListener('click', (e) => {
   if (selectBtn) {
     const question = selectBtn.closest('.ask-user-question');
     const questionId = question?.dataset.questionId;
-    if (questionId && state.answeredQuestions.has(questionId)) return; // Already answered
+    if (questionId && (state.answeredQuestions.has(questionId) || state.loadingQuestions.has(questionId))) return;
 
     const index = selectBtn.dataset.index;
     if (index) {
       if (questionId) {
-        state.answeredQuestions.add(questionId);
-        question.classList.add('answered');
+        state.loadingQuestions.add(questionId);
+        selectBtn.classList.add('loading');
+        selectBtn.disabled = true;
       }
       sendInput(index, null);
+      // Mark as answered after a short delay (will be confirmed when tool_result appears)
+      setTimeout(() => {
+        if (questionId) {
+          state.answeredQuestions.add(questionId);
+          state.loadingQuestions.delete(questionId);
+          question.classList.add('answered');
+        }
+      }, 500);
     }
     return;
   }
@@ -689,14 +720,15 @@ elements.messagesContainer.addEventListener('click', (e) => {
   if (submitBtn) {
     const question = submitBtn.closest('.ask-user-question');
     const questionId = question?.dataset.questionId;
-    if (questionId && state.answeredQuestions.has(questionId)) return; // Already answered
+    if (questionId && (state.answeredQuestions.has(questionId) || state.loadingQuestions.has(questionId))) return;
 
     const selected = question.querySelectorAll('.question-option.selected');
     const indices = Array.from(selected).map(b => b.dataset.index);
 
     if (questionId) {
-      state.answeredQuestions.add(questionId);
-      question.classList.add('answered');
+      state.loadingQuestions.add(questionId);
+      submitBtn.classList.add('loading');
+      submitBtn.disabled = true;
     }
 
     if (indices.length === 0) {
@@ -704,6 +736,60 @@ elements.messagesContainer.addEventListener('click', (e) => {
     } else {
       sendInput(indices.join(','), null);
     }
+
+    setTimeout(() => {
+      if (questionId) {
+        state.answeredQuestions.add(questionId);
+        state.loadingQuestions.delete(questionId);
+        question.classList.add('answered');
+      }
+    }, 500);
+    return;
+  }
+
+  // Approve plan (ExitPlanMode)
+  const approvePlanBtn = target.closest('[data-action="approve-plan"]');
+  if (approvePlanBtn) {
+    const planBlock = approvePlanBtn.closest('.exit-plan-mode');
+    const planId = planBlock?.dataset.planId;
+    if (planId && (state.answeredQuestions.has(planId) || state.loadingQuestions.has(planId))) return;
+
+    if (planId) {
+      state.loadingQuestions.add(planId);
+      approvePlanBtn.classList.add('loading');
+      approvePlanBtn.disabled = true;
+    }
+    sendInput('y', null); // 'y' confirms plan
+    setTimeout(() => {
+      if (planId) {
+        state.answeredQuestions.add(planId);
+        state.loadingQuestions.delete(planId);
+        planBlock.classList.add('answered');
+      }
+    }, 500);
+    return;
+  }
+
+  // Reject plan (ExitPlanMode)
+  const rejectPlanBtn = target.closest('[data-action="reject-plan"]');
+  if (rejectPlanBtn) {
+    const planBlock = rejectPlanBtn.closest('.exit-plan-mode');
+    const planId = planBlock?.dataset.planId;
+    if (planId && (state.answeredQuestions.has(planId) || state.loadingQuestions.has(planId))) return;
+
+    if (planId) {
+      state.loadingQuestions.add(planId);
+      rejectPlanBtn.classList.add('loading');
+      rejectPlanBtn.disabled = true;
+    }
+    sendInput('n', null); // 'n' rejects plan
+    setTimeout(() => {
+      if (planId) {
+        state.answeredQuestions.add(planId);
+        state.loadingQuestions.delete(planId);
+        planBlock.classList.add('answered');
+      }
+    }, 500);
     return;
   }
 });

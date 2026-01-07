@@ -16,8 +16,8 @@
   --text-primary: #e5e5e5;
   --text-secondary: #a0a0a0;
   --text-muted: #666;
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
+  --accent: #D97757;  /* Anthropic coral */
+  --accent-hover: #E8956F;
   --success: #22c55e;
   --warning: #f59e0b;
   --error: #ef4444;
@@ -87,10 +87,10 @@ html, body {
 header {
   display: flex;
   align-items: center;
-  padding: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
-  min-height: 60px;
+  min-height: 48px;
 }
 
 header h1 {
@@ -513,6 +513,41 @@ button {
   background: #d97706;
 }
 
+/* Loading state on buttons */
+.question-option.loading,
+.question-submit.loading,
+.plan-btn.loading {
+  opacity: 0.6;
+  pointer-events: none;
+  position: relative;
+}
+
+.question-option.loading::after,
+.question-submit.loading::after,
+.plan-btn.loading::after {
+  content: '';
+  position: absolute;
+  right: var(--space-md);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* Hide spinner when answered */
+.ask-user-question.answered .loading::after,
+.exit-plan-mode.answered .loading::after {
+  display: none;
+}
+
 /* Answered questions - disable interaction */
 .ask-user-question.answered {
   opacity: 0.6;
@@ -521,6 +556,86 @@ button {
 
 .ask-user-question.answered::after {
   content: '(answered)';
+  display: block;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-sm);
+}
+
+/* ExitPlanMode display */
+.exit-plan-mode {
+  background: var(--bg-tertiary);
+  border-left: 3px solid var(--accent);
+  padding: var(--space-md);
+  margin: var(--space-md) 0;
+  border-radius: 0 var(--border-radius) var(--border-radius) 0;
+}
+
+.exit-plan-mode .plan-header {
+  font-weight: 500;
+  color: var(--accent);
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-md);
+}
+
+.exit-plan-mode .plan-content {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: var(--space-md);
+  padding-right: var(--space-sm);
+}
+
+.exit-plan-mode .plan-actions {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.exit-plan-mode .plan-btn {
+  flex: 1;
+  min-height: var(--tap-target);
+  font-weight: 500;
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-base);
+}
+
+.exit-plan-mode .plan-btn.approve {
+  background: var(--success);
+  color: white;
+}
+
+.exit-plan-mode .plan-btn.approve:hover {
+  background: #16a34a;
+}
+
+.exit-plan-mode .plan-btn.approve:active {
+  transform: scale(0.98);
+}
+
+.exit-plan-mode .plan-btn.reject {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.exit-plan-mode .plan-btn.reject:hover {
+  background: var(--error);
+  color: white;
+  border-color: var(--error);
+}
+
+.exit-plan-mode .plan-btn.reject:active {
+  transform: scale(0.98);
+}
+
+/* Answered plans - disable interaction */
+.exit-plan-mode.answered {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.exit-plan-mode.answered::after {
+  content: '(decision made)';
   display: block;
   text-align: center;
   color: var(--text-muted);
