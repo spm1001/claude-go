@@ -277,6 +277,23 @@ function renderMessage(msg) {
         if (block.type === 'text') {
           return renderMarkdown(block.text);
         } else if (block.type === 'tool_use') {
+          // Special rendering for AskUserQuestion
+          if (block.name === 'AskUserQuestion' && block.input?.questions) {
+            return block.input.questions.map(q => `
+              <div class="ask-user-question">
+                <div class="question-header">${escapeHtml(q.header || 'Question')}</div>
+                <div class="question-text">${escapeHtml(q.question)}</div>
+                <div class="question-options">
+                  ${q.options.map((opt, i) => `
+                    <button class="question-option" onclick="sendQuestionResponse(${i + 1})">
+                      <span class="option-label">${escapeHtml(opt.label)}</span>
+                      <span class="option-desc">${escapeHtml(opt.description || '')}</span>
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+            `).join('');
+          }
           return `
             <div class="tool-use">
               <div class="tool-name">${escapeHtml(block.name)}</div>
@@ -404,6 +421,14 @@ function autoResize(textarea) {
   textarea.style.height = 'auto';
   textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
 }
+
+// Send response to AskUserQuestion (1-indexed option number)
+function sendQuestionResponse(optionNum) {
+  sendInput(String(optionNum), null);
+}
+
+// Make it globally available for onclick handlers
+window.sendQuestionResponse = sendQuestionResponse;
 
 // =============================================================================
 // Utility Functions
