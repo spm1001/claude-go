@@ -1292,8 +1292,8 @@ elements.interactionPanel?.addEventListener('click', (e) => {
   if (target.closest('[data-action="perm-always"]')) {
     const interaction = state.currentInteraction;
     if (interaction?.type === 'permission') {
-      // Send "3" for always trust
-      sendInput('3', 'answer');
+      // Send "3" for always trust (just number + Enter, no Tab)
+      sendInput('3', null);
       state.pendingPermissions.delete(interaction.tool_use_id);
       clearInteractionPanel();
       renderPermissionBanner(); // Update legacy banner too
