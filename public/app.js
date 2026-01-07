@@ -735,7 +735,7 @@ elements.messagesContainer.addEventListener('click', (e) => {
         selectBtn.classList.add('loading');
         selectBtn.disabled = true;
       }
-      sendInput(index, null);
+      sendInput(index, 'answer'); // Use answer action: number + Tab + Enter
       // Mark as answered after a short delay (will be confirmed when tool_result appears)
       setTimeout(() => {
         if (questionId) {
