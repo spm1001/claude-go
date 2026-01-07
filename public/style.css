@@ -113,24 +113,6 @@ header .subtitle {
   font-weight: 500;
 }
 
-#session-status {
-  display: inline-block;
-  font-size: var(--font-size-sm);
-  padding: 2px 8px;
-  border-radius: 4px;
-  margin-left: var(--space-sm);
-}
-
-#session-status.connected {
-  background: var(--success);
-  color: white;
-}
-
-#session-status.disconnected {
-  background: var(--error);
-  color: white;
-}
-
 /* ==========================================================================
    Buttons
    ========================================================================== */

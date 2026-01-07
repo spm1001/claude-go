@@ -39,8 +39,7 @@ const elements = {
   chatView: document.getElementById('chat-view'),
   backBtn: document.getElementById('back-btn'),
   sessionName: document.getElementById('session-name'),
-  sessionStatus: document.getElementById('session-status'),
-  menuBtn: document.getElementById('menu-btn'),
+  terminalBtn: document.getElementById('terminal-btn'),
   messagesContainer: document.getElementById('messages-container'),
   quickActions: document.getElementById('quick-actions'),
   messageInput: document.getElementById('message-input'),
@@ -97,7 +96,6 @@ function connectWebSocket(sessionId) {
   state.ws = new WebSocket(wsUrl);
   state.ws.onopen = async () => {
     console.log('WebSocket connected');
-    updateStatus('connected', 'Connected');
 
     // Fetch any pending permissions for this session
     try {
@@ -125,7 +123,6 @@ function connectWebSocket(sessionId) {
   state.ws.onclose = () => {
     console.log('WebSocket disconnected');
     clearInterval(state.heartbeatInterval);
-    updateStatus('disconnected', 'Disconnected');
   };
 
   state.ws.onerror = (err) => {
@@ -482,11 +479,6 @@ function renderMarkdown(text) {
   html = html.replace(/<pre>/g, '<pre><button class="copy-btn" data-action="copy">Copy</button>');
 
   return html;
-}
-
-function updateStatus(type, text) {
-  elements.sessionStatus.className = `status ${type}`;
-  elements.sessionStatus.textContent = text;
 }
 
 function scrollToBottom() {
@@ -884,6 +876,12 @@ elements.backBtn.addEventListener('click', () => {
     state.ws.close();
   }
   showSessionPicker();
+});
+
+elements.terminalBtn.addEventListener('click', () => {
+  if (state.currentSessionId) {
+    window.open(`/api/sessions/${state.currentSessionId}/terminal`, '_blank');
+  }
 });
 
 elements.sendBtn.addEventListener('click', handleSend);
