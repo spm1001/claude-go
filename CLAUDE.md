@@ -150,29 +150,46 @@ The Claude Code terminal UI has consistent keystroke patterns. Learn the grammar
 |-------------|-------------------|---------|
 | **Single-select question** | `number` → `Tab` → `Enter` | AskUserQuestion with multiSelect=false |
 | **Multi-select question** | `number` (toggle each) → `Tab` → `Enter` | AskUserQuestion with multiSelect=true |
-| **Permission prompt** | `y` or `n` → `Enter` | Tool approval |
-| **Plan approval** | `y` or `n` → `Enter` | ExitPlanMode |
+| **Permission prompt** | `Enter` (option 1 pre-focused) or `↓` → `Enter` | Tool approval (Write, Bash, etc.) |
+| **Plan approval** | `Enter` (approve pre-focused) or `↓` → `Enter` | ExitPlanMode |
 | **Text input** | literal text → `Enter` | Regular user messages |
 | **Interrupt** | `Ctrl+C` | Stop current operation |
 
 **Key insight:** Selection prompts need Tab to navigate to Submit before Enter confirms. Just pressing Enter after a number toggles the selection.
+
+**Permission prompt gotcha:** The numbered options (1/2/3) don't respond to number keys — those type into the "tell Claude what to do differently" text field. Use Enter (if option 1 is focused) or arrow keys to navigate.
 
 **Implementation:** See `lib/sessions.js` — the `answer` action sends `number + Tab + Enter`. Other actions send simpler sequences.
 
 ## Testing Infrastructure
 
 ```bash
+# Start dev server
+HOST=127.0.0.1 npm run dev
+
+# Spin up a fishbowl Claude (creates sandbox in ~/Repos to avoid /tmp path issues)
+./scripts/spinup-fishbowl.sh test1
+
 # Inspect DOM state programmatically
-python scripts/inspect-session.py <session-id>
-python scripts/inspect-session.py --list
+~/.claude/.venv/bin/python scripts/inspect-session.py <session-id>
+~/.claude/.venv/bin/python scripts/inspect-session.py --list
 
 # Run automated UI tests
-python scripts/test-ui.py                      # All tests
-python scripts/test-ui.py --test multi-question
+~/.claude/.venv/bin/python scripts/test-ui.py                      # All tests
+~/.claude/.venv/bin/python scripts/test-ui.py --test multi-question
+
+# Exploratory testing REPL
+~/.claude/.venv/bin/python scripts/explore.py
 
 # Debug endpoint for JSONL inspection
 curl http://localhost:7682/dev/messages/<session-id>
+
+# Direct tmux interaction
+tmux capture-pane -t claude-<session-id> -p | tail -30   # Check state
+tmux send-keys -t claude-<session-id> "Enter"             # Send Enter
 ```
+
+**Path gotcha:** Don't use `/tmp` for sandboxes — macOS resolves `/tmp` → `/private/tmp`, causing path mismatch. Use `~/Repos/fishbowl-sandboxes/` instead. See `.tvd.15` for the bug.
 
 ## Related
 
