@@ -19,7 +19,8 @@ const state = {
   deviceId: localStorage.getItem('deviceId') || `device-${Date.now()}`,
   messages: [],
   heartbeatInterval: null,
-  pendingPermissions: new Map() // tool_use_id -> permission data
+  pendingPermissions: new Map(), // tool_use_id -> permission data
+  answeredQuestions: new Set()   // question IDs that have been answered
 };
 
 // Save device ID for persistence across reloads
@@ -303,32 +304,33 @@ function renderMessage(msg) {
           if (block.name === 'AskUserQuestion' && block.input?.questions) {
             return block.input.questions.map((q, qIdx) => {
               const questionId = `q-${block.id}-${qIdx}`;
+              const answeredClass = state.answeredQuestions.has(questionId) ? ' answered' : '';
               if (q.multiSelect) {
                 // MultiSelect: toggle buttons with submit
                 return `
-                  <div class="ask-user-question" data-question-id="${questionId}">
+                  <div class="ask-user-question${answeredClass}" data-question-id="${questionId}" data-multi-select="true">
                     <div class="question-header">${escapeHtml(q.header || 'Question')}</div>
                     <div class="question-text">${escapeHtml(q.question)}</div>
                     <div class="question-options multi-select">
                       ${q.options.map((opt, i) => `
-                        <button class="question-option" data-index="${i + 1}" onclick="toggleOption(this)">
+                        <button class="question-option" data-action="toggle" data-index="${i + 1}">
                           <span class="option-label">${escapeHtml(opt.label)}</span>
                           <span class="option-desc">${escapeHtml(opt.description || '')}</span>
                         </button>
                       `).join('')}
                     </div>
-                    <button class="question-submit" onclick="submitMultiSelect(this)">Submit</button>
+                    <button class="question-submit" data-action="submit-multi">Submit</button>
                   </div>
                 `;
               } else {
                 // Single select: immediate send
                 return `
-                  <div class="ask-user-question">
+                  <div class="ask-user-question${answeredClass}" data-question-id="${questionId}">
                     <div class="question-header">${escapeHtml(q.header || 'Question')}</div>
                     <div class="question-text">${escapeHtml(q.question)}</div>
                     <div class="question-options">
                       ${q.options.map((opt, i) => `
-                        <button class="question-option" onclick="sendQuestionResponse(${i + 1})">
+                        <button class="question-option" data-action="select" data-index="${i + 1}">
                           <span class="option-label">${escapeHtml(opt.label)}</span>
                           <span class="option-desc">${escapeHtml(opt.description || '')}</span>
                         </button>
@@ -409,7 +411,7 @@ function renderMarkdown(text) {
   let html = marked.parse(text);
 
   // Add copy buttons to pre blocks
-  html = html.replace(/<pre>/g, '<pre><button class="copy-btn" onclick="copyCode(this)">Copy</button>');
+  html = html.replace(/<pre>/g, '<pre><button class="copy-btn" data-action="copy">Copy</button>');
 
   return html;
 }
@@ -467,40 +469,7 @@ function autoResize(textarea) {
   textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
 }
 
-// Send response to AskUserQuestion (1-indexed option number)
-function sendQuestionResponse(optionNum) {
-  sendInput(String(optionNum), null);
-}
-
-// Toggle option selection for multiSelect
-function toggleOption(btn) {
-  btn.classList.toggle('selected');
-}
-
-// Submit multiSelect response
-function submitMultiSelect(btn) {
-  const container = btn.closest('.ask-user-question');
-  if (!container) {
-    console.error('Could not find question container');
-    return;
-  }
-
-  const selected = container.querySelectorAll('.question-option.selected');
-  const indices = Array.from(selected).map(b => b.dataset.index);
-
-  if (indices.length === 0) {
-    // Nothing selected, maybe just press enter or send empty?
-    sendInput('', null);
-  } else {
-    // Send comma-separated indices
-    sendInput(indices.join(','), null);
-  }
-}
-
-// Make functions globally available for onclick handlers
-window.sendQuestionResponse = sendQuestionResponse;
-window.toggleOption = toggleOption;
-window.submitMultiSelect = submitMultiSelect;
+// Question/interaction handlers are now via event delegation (see Event Listeners section)
 
 // =============================================================================
 // Permission Handling
@@ -551,17 +520,17 @@ function renderPermissionBanner() {
   banner.innerHTML = Array.from(state.pendingPermissions.values()).map(p => {
     const inputPreview = formatToolInput(p.tool_name, p.tool_input);
     return `
-      <div class="permission-card" data-tool-use-id="${p.tool_use_id}">
+      <div class="permission-card" data-tool-use-id="${p.tool_use_id}" data-session-id="${p.session_id}">
         <div class="permission-header">
           <span class="permission-tool">${escapeHtml(p.tool_name)}</span>
           <span class="permission-time">${formatTime(p.received_at)}</span>
         </div>
         <div class="permission-preview">${escapeHtml(inputPreview)}</div>
         <div class="permission-actions">
-          <button class="permission-btn approve" onclick="respondToPermission('${p.tool_use_id}', '${p.session_id}', true)">
+          <button class="permission-btn approve" data-action="approve">
             Approve
           </button>
-          <button class="permission-btn deny" onclick="respondToPermission('${p.tool_use_id}', '${p.session_id}', false)">
+          <button class="permission-btn deny" data-action="deny">
             Deny
           </button>
         </div>
@@ -627,8 +596,7 @@ async function respondToPermission(toolUseId, sessionId, approved) {
   }
 }
 
-// Make respondToPermission globally available
-window.respondToPermission = respondToPermission;
+// Permission handlers are now via event delegation (see Event Listeners section)
 
 // =============================================================================
 // Utility Functions
@@ -658,20 +626,104 @@ function formatTime(timestamp) {
   return date.toLocaleDateString();
 }
 
-function copyCode(btn) {
-  const pre = btn.parentElement;
-  const code = pre.querySelector('code');
-  navigator.clipboard.writeText(code.textContent);
-  btn.textContent = 'Copied!';
-  setTimeout(() => btn.textContent = 'Copy', 1500);
-}
-
-// Make copyCode available globally
-window.copyCode = copyCode;
+// copyCode is now via event delegation (see Event Listeners section)
 
 // =============================================================================
 // Event Listeners
 // =============================================================================
+
+// Event delegation for messages container (questions, copy buttons)
+elements.messagesContainer.addEventListener('click', (e) => {
+  const target = e.target;
+
+  // Copy button
+  const copyBtn = target.closest('[data-action="copy"]');
+  if (copyBtn) {
+    const pre = copyBtn.parentElement;
+    const code = pre.querySelector('code');
+    navigator.clipboard.writeText(code.textContent);
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => copyBtn.textContent = 'Copy', 1500);
+    return;
+  }
+
+  // Question option (single select)
+  const selectBtn = target.closest('[data-action="select"]');
+  if (selectBtn) {
+    const question = selectBtn.closest('.ask-user-question');
+    const questionId = question?.dataset.questionId;
+    if (questionId && state.answeredQuestions.has(questionId)) return; // Already answered
+
+    const index = selectBtn.dataset.index;
+    if (index) {
+      if (questionId) {
+        state.answeredQuestions.add(questionId);
+        question.classList.add('answered');
+      }
+      sendInput(index, null);
+    }
+    return;
+  }
+
+  // Question option (multi-select toggle)
+  const toggleBtn = target.closest('[data-action="toggle"]');
+  if (toggleBtn) {
+    const question = toggleBtn.closest('.ask-user-question');
+    const questionId = question?.dataset.questionId;
+    if (questionId && state.answeredQuestions.has(questionId)) return; // Already answered
+
+    toggleBtn.classList.toggle('selected');
+    return;
+  }
+
+  // Multi-select submit
+  const submitBtn = target.closest('[data-action="submit-multi"]');
+  if (submitBtn) {
+    const question = submitBtn.closest('.ask-user-question');
+    const questionId = question?.dataset.questionId;
+    if (questionId && state.answeredQuestions.has(questionId)) return; // Already answered
+
+    const selected = question.querySelectorAll('.question-option.selected');
+    const indices = Array.from(selected).map(b => b.dataset.index);
+
+    if (questionId) {
+      state.answeredQuestions.add(questionId);
+      question.classList.add('answered');
+    }
+
+    if (indices.length === 0) {
+      sendInput('', null);
+    } else {
+      sendInput(indices.join(','), null);
+    }
+    return;
+  }
+});
+
+// Event delegation for permission banner (approve/deny)
+document.addEventListener('click', (e) => {
+  const target = e.target;
+
+  // Approve permission
+  const approveBtn = target.closest('[data-action="approve"]');
+  if (approveBtn) {
+    const card = approveBtn.closest('.permission-card');
+    if (card) {
+      respondToPermission(card.dataset.toolUseId, card.dataset.sessionId, true);
+    }
+    return;
+  }
+
+  // Deny permission
+  const denyBtn = target.closest('[data-action="deny"]');
+  if (denyBtn) {
+    const card = denyBtn.closest('.permission-card');
+    if (card) {
+      respondToPermission(card.dataset.toolUseId, card.dataset.sessionId, false);
+    }
+    return;
+  }
+});
 
 elements.newSessionBtn.addEventListener('click', async () => {
   try {

@@ -513,6 +513,21 @@ button {
   background: #d97706;
 }
 
+/* Answered questions - disable interaction */
+.ask-user-question.answered {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.ask-user-question.answered::after {
+  content: '(answered)';
+  display: block;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-sm);
+}
+
 /* ==========================================================================
    Input Area
    ========================================================================== */
