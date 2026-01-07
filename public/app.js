@@ -20,7 +20,8 @@ const state = {
   messages: [],
   heartbeatInterval: null,
   pendingPermissions: new Map(), // tool_use_id -> permission data
-  answeredQuestions: new Set()   // question IDs that have been answered
+  answeredQuestions: new Set(),  // question IDs that have been answered
+  respondingPermissions: new Set() // permission IDs with in-flight responses
 };
 
 // Save device ID for persistence across reloads
@@ -230,6 +231,7 @@ async function loadSessions() {
 async function loadSessionContent(sessionId) {
   elements.messagesContainer.innerHTML = '<p class="loading">Loading conversation...</p>';
   state.messages = [];
+  state.answeredQuestions.clear(); // Reset for new session
 
   try {
     const messages = await fetchSessionContent(sessionId);
@@ -562,6 +564,10 @@ function formatToolInput(toolName, input) {
  * Send permission response to server
  */
 async function respondToPermission(toolUseId, sessionId, approved) {
+  // Guard against double-clicks
+  if (state.respondingPermissions.has(toolUseId)) return;
+  state.respondingPermissions.add(toolUseId);
+
   try {
     const res = await fetch('/hook/respond', {
       method: 'POST',
@@ -593,6 +599,8 @@ async function respondToPermission(toolUseId, sessionId, approved) {
   } catch (err) {
     console.error('Error responding to permission:', err);
     alert('Failed to send permission response: ' + err.message);
+  } finally {
+    state.respondingPermissions.delete(toolUseId);
   }
 }
 
