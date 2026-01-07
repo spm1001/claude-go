@@ -18,7 +18,8 @@ const state = {
   ws: null,
   deviceId: localStorage.getItem('deviceId') || `device-${Date.now()}`,
   messages: [],
-  heartbeatInterval: null
+  heartbeatInterval: null,
+  pendingPermissions: new Map() // tool_use_id -> permission data
 };
 
 // Save device ID for persistence across reloads
@@ -91,9 +92,20 @@ function connectWebSocket(sessionId) {
   const wsUrl = `${protocol}//${window.location.host}/ws/${sessionId}`;
 
   state.ws = new WebSocket(wsUrl);
-  state.ws.onopen = () => {
+  state.ws.onopen = async () => {
     console.log('WebSocket connected');
     updateStatus('connected', 'Connected');
+
+    // Fetch any pending permissions for this session
+    try {
+      const res = await fetch(`/hook/pending?session_id=${sessionId}`);
+      const pending = await res.json();
+      pending.forEach(p => state.pendingPermissions.set(p.tool_use_id, p));
+      renderPermissionBanner();
+    } catch (err) {
+      console.error('Error fetching pending permissions:', err);
+    }
+
     // Start heartbeat
     state.heartbeatInterval = setInterval(() => {
       if (state.ws.readyState === WebSocket.OPEN) {
@@ -147,6 +159,16 @@ function handleWebSocketMessage(msg) {
 
     case 'heartbeat-ack':
       // Heartbeat acknowledged
+      break;
+
+    case 'permission_request':
+      // Claude needs permission approval
+      handlePermissionRequest(msg.data);
+      break;
+
+    case 'permission_resolved':
+      // Permission was handled (by us or another device)
+      handlePermissionResolved(msg.data);
       break;
   }
 }
@@ -479,6 +501,134 @@ function submitMultiSelect(btn) {
 window.sendQuestionResponse = sendQuestionResponse;
 window.toggleOption = toggleOption;
 window.submitMultiSelect = submitMultiSelect;
+
+// =============================================================================
+// Permission Handling
+// =============================================================================
+
+/**
+ * Handle incoming permission request from WebSocket
+ */
+function handlePermissionRequest(permission) {
+  console.log('Permission request:', permission);
+  state.pendingPermissions.set(permission.tool_use_id, permission);
+  renderPermissionBanner();
+}
+
+/**
+ * Handle permission resolved (approved/denied)
+ */
+function handlePermissionResolved(data) {
+  console.log('Permission resolved:', data);
+  state.pendingPermissions.delete(data.tool_use_id);
+  renderPermissionBanner();
+}
+
+/**
+ * Render the permission banner showing pending approvals
+ */
+function renderPermissionBanner() {
+  // Get or create permission banner container
+  let banner = document.getElementById('permission-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'permission-banner';
+    banner.className = 'permission-banner';
+    // Insert at top of chat view
+    const chatView = document.getElementById('chat-view');
+    chatView.insertBefore(banner, chatView.firstChild.nextSibling);
+  }
+
+  // If no pending permissions, hide banner
+  if (state.pendingPermissions.size === 0) {
+    banner.classList.add('hidden');
+    banner.innerHTML = '';
+    return;
+  }
+
+  // Render permission cards
+  banner.classList.remove('hidden');
+  banner.innerHTML = Array.from(state.pendingPermissions.values()).map(p => {
+    const inputPreview = formatToolInput(p.tool_name, p.tool_input);
+    return `
+      <div class="permission-card" data-tool-use-id="${p.tool_use_id}">
+        <div class="permission-header">
+          <span class="permission-tool">${escapeHtml(p.tool_name)}</span>
+          <span class="permission-time">${formatTime(p.received_at)}</span>
+        </div>
+        <div class="permission-preview">${escapeHtml(inputPreview)}</div>
+        <div class="permission-actions">
+          <button class="permission-btn approve" onclick="respondToPermission('${p.tool_use_id}', '${p.session_id}', true)">
+            Approve
+          </button>
+          <button class="permission-btn deny" onclick="respondToPermission('${p.tool_use_id}', '${p.session_id}', false)">
+            Deny
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * Format tool input for display
+ */
+function formatToolInput(toolName, input) {
+  if (!input) return '';
+
+  switch (toolName) {
+    case 'Write':
+    case 'Edit':
+      return input.file_path || '';
+    case 'Bash':
+      return input.command?.slice(0, 100) || '';
+    case 'Read':
+      return input.file_path || '';
+    default:
+      return JSON.stringify(input).slice(0, 100);
+  }
+}
+
+/**
+ * Send permission response to server
+ */
+async function respondToPermission(toolUseId, sessionId, approved) {
+  try {
+    const res = await fetch('/hook/respond', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tool_use_id: toolUseId,
+        session_id: sessionId,
+        approved
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        // Session not found - started outside Claude Go
+        alert('Session not found. This Claude session may have been started outside Claude Go.');
+        // Still remove from UI since we can't handle it
+        state.pendingPermissions.delete(toolUseId);
+        renderPermissionBanner();
+        return;
+      }
+      throw new Error(data.error || 'Failed to send response');
+    }
+
+    // Remove from local state (server will also broadcast permission_resolved)
+    state.pendingPermissions.delete(toolUseId);
+    renderPermissionBanner();
+  } catch (err) {
+    console.error('Error responding to permission:', err);
+    alert('Failed to send permission response: ' + err.message);
+  }
+}
+
+// Make respondToPermission globally available
+window.respondToPermission = respondToPermission;
 
 // =============================================================================
 // Utility Functions

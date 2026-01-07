@@ -33,6 +33,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 const sessionClients = new Map(); // sessionId -> Set<WebSocket>
 const deviceLeases = new Map();   // sessionId -> { deviceId, lastHeartbeat }
 
+// Track pending permission requests
+// Key: tool_use_id, Value: { session_id, tool_name, tool_input, received_at }
+const pendingPermissions = new Map();
+
 // =============================================================================
 // API Routes
 // =============================================================================
@@ -145,6 +149,124 @@ app.get('/api/dropzone', async (req, res) => {
 });
 
 // =============================================================================
+// Hook Endpoints (Permission Handling)
+// =============================================================================
+
+/**
+ * POST /hook/permission
+ * Receives permission requests from Claude Code PreToolUse hook.
+ * Stores the request and broadcasts to connected WebSocket clients.
+ */
+app.post('/hook/permission', (req, res) => {
+  const { session_id, tool_name, tool_input, tool_use_id } = req.body;
+
+  if (!tool_use_id || !session_id) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  console.log(`Permission request: session=${session_id}, tool=${tool_name}, id=${tool_use_id}`);
+
+  // Store pending permission
+  const permission = {
+    session_id,
+    tool_name,
+    tool_input,
+    tool_use_id,
+    received_at: Date.now()
+  };
+  pendingPermissions.set(tool_use_id, permission);
+
+  // Broadcast to all clients watching this session
+  const clients = sessionClients.get(session_id);
+  if (clients) {
+    const message = JSON.stringify({
+      type: 'permission_request',
+      data: permission
+    });
+    clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    });
+  }
+
+  // TODO: Trigger push notification here
+  // notify.send({ title: `Claude needs approval`, body: `${tool_name}: ${JSON.stringify(tool_input).slice(0, 100)}` });
+
+  res.json({ success: true, queued: true });
+});
+
+/**
+ * POST /hook/respond
+ * Receives approval/denial from the web UI.
+ * Sends the appropriate keystroke to tmux.
+ */
+app.post('/hook/respond', async (req, res) => {
+  const { tool_use_id, session_id, approved } = req.body;
+
+  if (!tool_use_id || !session_id) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Remove from pending
+  const permission = pendingPermissions.get(tool_use_id);
+  pendingPermissions.delete(tool_use_id);
+
+  console.log(`Permission response: session=${session_id}, id=${tool_use_id}, approved=${approved}`);
+
+  try {
+    const sessions = require('./lib/sessions');
+    // Claude's permission prompt: 1=Yes, 2=Yes allow all, Esc=cancel
+    // We send "1" for single approval
+    const key = approved ? '1' : 'Escape';
+    const sent = await sessions.sendKeys(session_id, key);
+
+    if (!sent) {
+      // Session not found - likely started outside Claude Go
+      console.warn(`Permission response for unknown session: ${session_id}`);
+      return res.status(404).json({
+        error: 'Session not found',
+        detail: 'This session may have been started outside Claude Go'
+      });
+    }
+
+    // Notify clients that permission was handled
+    const clients = sessionClients.get(session_id);
+    if (clients) {
+      const message = JSON.stringify({
+        type: 'permission_resolved',
+        data: { tool_use_id, approved }
+      });
+      clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(message);
+        }
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error sending permission response:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /hook/pending
+ * Get all pending permission requests (useful for UI reconnection)
+ */
+app.get('/hook/pending', (req, res) => {
+  const { session_id } = req.query;
+
+  let permissions = Array.from(pendingPermissions.values());
+  if (session_id) {
+    permissions = permissions.filter(p => p.session_id === session_id);
+  }
+
+  res.json(permissions);
+});
+
+// =============================================================================
 // WebSocket Handling
 // =============================================================================
 
@@ -238,17 +360,27 @@ wss.on('connection', (ws, req) => {
 });
 
 // =============================================================================
-// Lease Expiry Check
+// Periodic Cleanup
 // =============================================================================
 
 setInterval(() => {
   const now = Date.now();
   const LEASE_TIMEOUT = 15000; // 15 seconds
+  const PERMISSION_TIMEOUT = 600000; // 10 minutes
 
+  // Clean up expired device leases
   for (const [sessionId, lease] of deviceLeases) {
     if (now - lease.lastHeartbeat > LEASE_TIMEOUT) {
       deviceLeases.delete(sessionId);
       console.log(`Lease expired for session ${sessionId}`);
+    }
+  }
+
+  // Clean up stale pending permissions
+  for (const [toolUseId, permission] of pendingPermissions) {
+    if (now - permission.received_at > PERMISSION_TIMEOUT) {
+      pendingPermissions.delete(toolUseId);
+      console.log(`Stale permission cleaned up: ${toolUseId} (${permission.tool_name})`);
     }
   }
 }, 5000);

@@ -1,0 +1,14 @@
+{
+  "_comment": "Add this PreToolUse block to ~/.claude/settings.json hooks section",
+  "PreToolUse": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "$HOME/Repos/claude-go/hooks/claude-go-permission.sh"
+        }
+      ]
+    }
+  ]
+}
