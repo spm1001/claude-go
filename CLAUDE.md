@@ -142,6 +142,38 @@ Mobile UI tap → server sends: tmux send-keys "1" Enter
 }
 ```
 
+## Claude Code Terminal Grammar
+
+The Claude Code terminal UI has consistent keystroke patterns. Learn the grammar, not individual cases.
+
+| Prompt Type | Keystroke Sequence | Example |
+|-------------|-------------------|---------|
+| **Single-select question** | `number` → `Tab` → `Enter` | AskUserQuestion with multiSelect=false |
+| **Multi-select question** | `number` (toggle each) → `Tab` → `Enter` | AskUserQuestion with multiSelect=true |
+| **Permission prompt** | `y` or `n` → `Enter` | Tool approval |
+| **Plan approval** | `y` or `n` → `Enter` | ExitPlanMode |
+| **Text input** | literal text → `Enter` | Regular user messages |
+| **Interrupt** | `Ctrl+C` | Stop current operation |
+
+**Key insight:** Selection prompts need Tab to navigate to Submit before Enter confirms. Just pressing Enter after a number toggles the selection.
+
+**Implementation:** See `lib/sessions.js` — the `answer` action sends `number + Tab + Enter`. Other actions send simpler sequences.
+
+## Testing Infrastructure
+
+```bash
+# Inspect DOM state programmatically
+python scripts/inspect-session.py <session-id>
+python scripts/inspect-session.py --list
+
+# Run automated UI tests
+python scripts/test-ui.py                      # All tests
+python scripts/test-ui.py --test multi-question
+
+# Debug endpoint for JSONL inspection
+curl http://localhost:7682/dev/messages/<session-id>
+```
+
 ## Related
 
 - `~/Repos/claude-code-web/` - Previous ttyd-based solution
