@@ -487,6 +487,32 @@ button {
   margin-top: var(--space-xs);
 }
 
+/* MultiSelect selected state */
+.ask-user-question .question-option.selected {
+  border-color: var(--warning);
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.ask-user-question .question-option.selected .option-label {
+  color: var(--warning);
+}
+
+/* Submit button for multiSelect */
+.ask-user-question .question-submit {
+  margin-top: var(--space-md);
+  background: var(--warning);
+  color: black;
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--border-radius);
+  font-weight: 500;
+  width: 100%;
+  min-height: var(--tap-target);
+}
+
+.ask-user-question .question-submit:hover {
+  background: #d97706;
+}
+
 /* ==========================================================================
    Input Area
    ========================================================================== */

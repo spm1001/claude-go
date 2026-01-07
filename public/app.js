@@ -279,20 +279,43 @@ function renderMessage(msg) {
         } else if (block.type === 'tool_use') {
           // Special rendering for AskUserQuestion
           if (block.name === 'AskUserQuestion' && block.input?.questions) {
-            return block.input.questions.map(q => `
-              <div class="ask-user-question">
-                <div class="question-header">${escapeHtml(q.header || 'Question')}</div>
-                <div class="question-text">${escapeHtml(q.question)}</div>
-                <div class="question-options">
-                  ${q.options.map((opt, i) => `
-                    <button class="question-option" onclick="sendQuestionResponse(${i + 1})">
-                      <span class="option-label">${escapeHtml(opt.label)}</span>
-                      <span class="option-desc">${escapeHtml(opt.description || '')}</span>
-                    </button>
-                  `).join('')}
-                </div>
-              </div>
-            `).join('');
+            return block.input.questions.map((q, qIdx) => {
+              const questionId = `q-${block.id}-${qIdx}`;
+              if (q.multiSelect) {
+                // MultiSelect: toggle buttons with submit
+                return `
+                  <div class="ask-user-question" data-question-id="${questionId}">
+                    <div class="question-header">${escapeHtml(q.header || 'Question')}</div>
+                    <div class="question-text">${escapeHtml(q.question)}</div>
+                    <div class="question-options multi-select">
+                      ${q.options.map((opt, i) => `
+                        <button class="question-option" data-index="${i + 1}" onclick="toggleOption(this)">
+                          <span class="option-label">${escapeHtml(opt.label)}</span>
+                          <span class="option-desc">${escapeHtml(opt.description || '')}</span>
+                        </button>
+                      `).join('')}
+                    </div>
+                    <button class="question-submit" onclick="submitMultiSelect('${questionId}')">Submit</button>
+                  </div>
+                `;
+              } else {
+                // Single select: immediate send
+                return `
+                  <div class="ask-user-question">
+                    <div class="question-header">${escapeHtml(q.header || 'Question')}</div>
+                    <div class="question-text">${escapeHtml(q.question)}</div>
+                    <div class="question-options">
+                      ${q.options.map((opt, i) => `
+                        <button class="question-option" onclick="sendQuestionResponse(${i + 1})">
+                          <span class="option-label">${escapeHtml(opt.label)}</span>
+                          <span class="option-desc">${escapeHtml(opt.description || '')}</span>
+                        </button>
+                      `).join('')}
+                    </div>
+                  </div>
+                `;
+              }
+            }).join('');
           }
           return `
             <div class="tool-use">
@@ -427,8 +450,32 @@ function sendQuestionResponse(optionNum) {
   sendInput(String(optionNum), null);
 }
 
-// Make it globally available for onclick handlers
+// Toggle option selection for multiSelect
+function toggleOption(btn) {
+  btn.classList.toggle('selected');
+}
+
+// Submit multiSelect response
+function submitMultiSelect(questionId) {
+  const container = document.querySelector(`[data-question-id="${questionId}"]`);
+  if (!container) return;
+
+  const selected = container.querySelectorAll('.question-option.selected');
+  const indices = Array.from(selected).map(btn => btn.dataset.index);
+
+  if (indices.length === 0) {
+    // Nothing selected, maybe just press enter or send empty?
+    sendInput('', null);
+  } else {
+    // Send comma-separated indices
+    sendInput(indices.join(','), null);
+  }
+}
+
+// Make functions globally available for onclick handlers
 window.sendQuestionResponse = sendQuestionResponse;
+window.toggleOption = toggleOption;
+window.submitMultiSelect = submitMultiSelect;
 
 // =============================================================================
 // Utility Functions
