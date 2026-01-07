@@ -142,24 +142,37 @@ Mobile UI tap → server sends: tmux send-keys "1" Enter
 }
 ```
 
-## Claude Code Terminal Grammar
+## Interaction Grammar
 
-The Claude Code terminal UI has consistent keystroke patterns. Learn the grammar, not individual cases.
+**Use the API, not raw keystrokes.** The grammar is encoded in `lib/sessions.js`:
 
-| Prompt Type | Keystroke Sequence | Example |
-|-------------|-------------------|---------|
-| **Single-select question** | `number` → `Tab` → `Enter` | AskUserQuestion with multiSelect=false |
-| **Multi-select question** | `number` (toggle each) → `Tab` → `Enter` | AskUserQuestion with multiSelect=true |
-| **Permission prompt** | `Enter` (option 1 pre-focused) or `↓` → `Enter` | Tool approval (Write, Bash, etc.) |
-| **Plan approval** | `Enter` (approve pre-focused) or `↓` → `Enter` | ExitPlanMode |
-| **Text input** | literal text → `Enter` | Regular user messages |
-| **Interrupt** | `Ctrl+C` | Stop current operation |
+```bash
+# Answer any numbered selection (AskUserQuestion, plan mode, permissions)
+curl -X POST ".../api/sessions/$ID/input" -d '{"text":"1","action":"answer"}'
 
-**Key insight:** Selection prompts need Tab to navigate to Submit before Enter confirms. Just pressing Enter after a number toggles the selection.
+# Simple y/n prompts (rare)
+curl -X POST ".../api/sessions/$ID/input" -d '{"action":"approve"}'
 
-**Permission prompt gotcha:** The numbered options (1/2/3) don't respond to number keys — those type into the "tell Claude what to do differently" text field. Use Enter (if option 1 is focused) or arrow keys to navigate.
+# Send user message
+curl -X POST ".../api/sessions/$ID/input" -d '{"text":"Hello Claude"}'
+```
 
-**Implementation:** See `lib/sessions.js` — the `answer` action sends `number + Tab + Enter`. Other actions send simpler sequences.
+| API Action | Sends | Use For |
+|------------|-------|---------|
+| `answer` | `text` + `Tab` + `Enter` | Numbered selections (questions, plan approval, permissions) |
+| `approve` | `y` + `Enter` | Simple y/n only (not numbered options!) |
+| `reject` | `n` + `Enter` | Simple y/n only |
+| `continue` | `Enter` | Continue prompts |
+| (none) | `text` + `Enter` | User messages |
+
+**Key insight:** Almost everything uses `action: "answer"` — AskUserQuestion, ExitPlanMode, permission prompts with options. The `approve`/`reject` actions are only for rare simple y/n prompts.
+
+**Direct tmux (for debugging only):**
+```bash
+tmux send-keys -t claude-$ID C-m        # Enter (more reliable than "Enter")
+tmux send-keys -t claude-$ID "1"        # Literal "1"
+tmux send-keys -t claude-$ID -l "text"  # Literal text (use -l flag)
+```
 
 ## Testing Infrastructure
 
