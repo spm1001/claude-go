@@ -319,6 +319,20 @@ if (process.env.NODE_ENV !== 'production') {
     console.log(`[dev] Injected message to ${sent} client(s) for session ${sessionId}`);
     res.json({ ok: true, clientCount: sent });
   });
+
+  /**
+   * GET /dev/messages/:sessionId
+   * Get parsed messages for debugging
+   */
+  app.get('/dev/messages/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    try {
+      const messages = await require('./lib/jsonl').readSession(sessionId);
+      res.json(messages);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 }
 
 // =============================================================================

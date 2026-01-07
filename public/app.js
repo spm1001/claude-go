@@ -242,6 +242,46 @@ async function loadSessionContent(sessionId) {
 
   try {
     const messages = await fetchSessionContent(sessionId);
+
+    // Pre-populate answeredQuestions from historical tool_results
+    const toolUseIds = new Map(); // tool_use_id -> { type, questionCount }
+    const answeredToolUseIds = new Set();
+
+    for (const msg of messages) {
+      if (Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          // Track AskUserQuestion and ExitPlanMode tool_use blocks
+          if (block.type === 'tool_use') {
+            if (block.name === 'AskUserQuestion' && block.input?.questions) {
+              toolUseIds.set(block.id, {
+                type: 'question',
+                count: block.input.questions.length
+              });
+            } else if (block.name === 'ExitPlanMode') {
+              toolUseIds.set(block.id, { type: 'plan', count: 1 });
+            }
+          }
+          // Track tool_results
+          if (block.type === 'tool_result' && toolUseIds.has(block.tool_use_id)) {
+            answeredToolUseIds.add(block.tool_use_id);
+          }
+        }
+      }
+    }
+
+    // Mark answered questions/plans
+    for (const [toolUseId, info] of toolUseIds) {
+      if (answeredToolUseIds.has(toolUseId)) {
+        if (info.type === 'question') {
+          for (let i = 0; i < info.count; i++) {
+            state.answeredQuestions.add(`q-${toolUseId}-${i}`);
+          }
+        } else if (info.type === 'plan') {
+          state.answeredQuestions.add(`plan-${toolUseId}`);
+        }
+      }
+    }
+
     elements.messagesContainer.innerHTML = '';
 
     for (const msg of messages) {
@@ -263,7 +303,11 @@ function addOrUpdateMessage(msg) {
     Object.assign(existing, msg);
     const el = document.querySelector(`[data-uuid="${msg.uuid}"]`);
     if (el) {
-      el.outerHTML = renderMessage(msg);
+      // Don't re-render if there are unanswered interactive elements (would swallow clicks)
+      const hasUnansweredInteractive = el.querySelector('.ask-user-question:not(.answered), .exit-plan-mode:not(.answered)');
+      if (!hasUnansweredInteractive) {
+        el.outerHTML = renderMessage(msg);
+      }
     }
   } else {
     // Add new
