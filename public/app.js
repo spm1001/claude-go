@@ -295,7 +295,7 @@ function renderMessage(msg) {
                         </button>
                       `).join('')}
                     </div>
-                    <button class="question-submit" onclick="submitMultiSelect('${questionId}')">Submit</button>
+                    <button class="question-submit" onclick="submitMultiSelect(this)">Submit</button>
                   </div>
                 `;
               } else {
@@ -456,12 +456,15 @@ function toggleOption(btn) {
 }
 
 // Submit multiSelect response
-function submitMultiSelect(questionId) {
-  const container = document.querySelector(`[data-question-id="${questionId}"]`);
-  if (!container) return;
+function submitMultiSelect(btn) {
+  const container = btn.closest('.ask-user-question');
+  if (!container) {
+    console.error('Could not find question container');
+    return;
+  }
 
   const selected = container.querySelectorAll('.question-option.selected');
-  const indices = Array.from(selected).map(btn => btn.dataset.index);
+  const indices = Array.from(selected).map(b => b.dataset.index);
 
   if (indices.length === 0) {
     // Nothing selected, maybe just press enter or send empty?
