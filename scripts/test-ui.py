@@ -282,11 +282,384 @@ def test_button_click(tester):
         return False
 
 
+def test_multiselect(tester):
+    """Test multi-select question (toggle options, submit)."""
+    print("\n=== TEST: MultiSelect Question ===")
+
+    tool_id = f"toolu_multi_{int(time.time())}"
+
+    # Inject multi-select question
+    tester.inject_message([{
+        "type": "tool_use",
+        "id": tool_id,
+        "name": "AskUserQuestion",
+        "input": {
+            "questions": [{
+                "question": "Which features do you want?",
+                "header": "Features",
+                "multiSelect": True,
+                "options": [
+                    {"label": "Auth", "description": "Authentication"},
+                    {"label": "API", "description": "REST API"},
+                    {"label": "DB", "description": "Database"}
+                ]
+            }]
+        }
+    }])
+
+    # Find the question
+    q_selector = f'[data-question-id*="{tool_id}"]'
+    question = tester.page.locator(q_selector)
+
+    if question.count() == 0:
+        print("❌ FAILED: Multi-select question not rendered")
+        return False
+
+    # Should have toggle buttons, not select buttons
+    toggle_btns = question.locator('[data-action="toggle"]')
+    submit_btn = question.locator('[data-action="submit-multi"]')
+
+    if toggle_btns.count() != 3:
+        print(f"❌ FAILED: Expected 3 toggle buttons, found {toggle_btns.count()}")
+        return False
+
+    if submit_btn.count() != 1:
+        print(f"❌ FAILED: Expected 1 submit button, found {submit_btn.count()}")
+        return False
+
+    # Toggle first and third options
+    toggle_btns.nth(0).click()
+    tester.page.wait_for_timeout(200)
+    toggle_btns.nth(2).click()
+    tester.page.wait_for_timeout(200)
+
+    # Verify selection state
+    btn1_selected = toggle_btns.nth(0).evaluate('el => el.classList.contains("selected")')
+    btn2_selected = toggle_btns.nth(1).evaluate('el => el.classList.contains("selected")')
+    btn3_selected = toggle_btns.nth(2).evaluate('el => el.classList.contains("selected")')
+
+    if not (btn1_selected and not btn2_selected and btn3_selected):
+        print(f"❌ FAILED: Toggle state wrong: {btn1_selected}, {btn2_selected}, {btn3_selected}")
+        return False
+
+    # Submit
+    submit_btn.click()
+    tester.page.wait_for_timeout(600)
+
+    # Check answered state
+    is_answered = question.first.evaluate('el => el.classList.contains("answered")')
+
+    if is_answered:
+        print("✅ PASSED: Multi-select UI works (toggle + submit)")
+        return True
+    else:
+        print("❌ FAILED: Question not marked answered after submit")
+        return False
+
+
+def test_exit_plan_reject(tester):
+    """Test ExitPlanMode reject button."""
+    print("\n=== TEST: ExitPlanMode Reject ===")
+
+    tool_id = f"toolu_reject_{int(time.time())}"
+
+    # Inject plan
+    tester.inject_message([{
+        "type": "tool_use",
+        "id": tool_id,
+        "name": "ExitPlanMode",
+        "input": {"plan": "## Plan to Reject\n1. Bad step"}
+    }])
+
+    plan_selector = f'[data-plan-id="plan-{tool_id}"]'
+    plan = tester.page.locator(plan_selector)
+
+    if plan.count() == 0:
+        print("❌ FAILED: Plan not rendered")
+        return False
+
+    reject_btn = plan.locator('[data-action="reject-plan"]')
+    if reject_btn.count() == 0:
+        print("❌ FAILED: Reject button not found")
+        return False
+
+    reject_btn.click()
+    tester.page.wait_for_timeout(600)
+
+    is_answered = plan.first.evaluate('el => el.classList.contains("answered")')
+
+    if is_answered:
+        print("✅ PASSED: ExitPlanMode reject works")
+        return True
+    else:
+        print("❌ FAILED: Plan not marked answered after reject")
+        return False
+
+
+def test_other_option(tester):
+    """Test 'Other' free-text option in AskUserQuestion."""
+    print("\n=== TEST: Other Free-Text Option ===")
+
+    # This tests if Claude Go handles the "Other" option that Claude auto-adds
+    # Currently we don't render an explicit "Other" button - users type in input
+    # This test verifies input works when question is present
+
+    tool_id = f"toolu_other_{int(time.time())}"
+
+    tester.inject_message([{
+        "type": "tool_use",
+        "id": tool_id,
+        "name": "AskUserQuestion",
+        "input": {
+            "questions": [{
+                "question": "Pick a color?",
+                "header": "Color",
+                "multiSelect": False,
+                "options": [
+                    {"label": "Red", "description": "Like blood"},
+                    {"label": "Blue", "description": "Like sky"}
+                ]
+            }]
+        }
+    }])
+
+    # Verify question rendered
+    q_selector = f'[data-question-id*="{tool_id}"]'
+    question = tester.page.locator(q_selector)
+
+    if question.count() == 0:
+        print("❌ FAILED: Question not rendered")
+        return False
+
+    # For "Other", user types in message input
+    # Verify input is available and works
+    initial_count = tester.get_message_count()
+    tester.send_message("Green - like grass")
+    tester.page.wait_for_timeout(500)
+
+    new_count = tester.get_message_count()
+    if new_count > initial_count:
+        print("✅ PASSED: Can send custom 'Other' text via input")
+        print("  ⚠️  NOTE: This doesn't mark question as answered (by design)")
+        return True
+    else:
+        print("❌ FAILED: Could not send message while question is pending")
+        return False
+
+
+def test_permission_approve(tester):
+    """Test permission card approve button."""
+    print("\n=== TEST: Permission Approve ===")
+
+    tool_use_id = f"toolu_perm_{int(time.time())}"
+
+    # Inject permission request via dev endpoint
+    payload = {
+        "type": "permission_request",
+        "data": {
+            "tool_use_id": tool_use_id,
+            "session_id": tester.session_id,
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo test"},
+            "received_at": int(time.time() * 1000)
+        }
+    }
+    resp = requests.post(f"{BASE_URL}/dev/inject/{tester.session_id}", json=payload)
+    if resp.status_code != 200:
+        print(f"❌ FAILED: Could not inject permission: {resp.text}")
+        return False
+
+    tester.page.wait_for_timeout(500)
+
+    # Find permission card
+    card = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id}"]')
+    if card.count() == 0:
+        print("❌ FAILED: Permission card not rendered")
+        return False
+
+    # Verify tool name shown
+    tool_name = card.locator('.permission-tool').text_content()
+    if 'Bash' not in tool_name:
+        print(f"❌ FAILED: Expected 'Bash' in tool name, got '{tool_name}'")
+        return False
+
+    # Click approve
+    approve_btn = card.locator('[data-action="approve"]')
+    approve_btn.click()
+    tester.page.wait_for_timeout(800)
+
+    # Card should be gone (permission resolved)
+    remaining = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id}"]')
+    if remaining.count() > 0:
+        print("❌ FAILED: Permission card still visible after approve")
+        return False
+
+    print("✅ PASSED: Permission approve works")
+    return True
+
+
+def test_permission_deny(tester):
+    """Test permission card deny button."""
+    print("\n=== TEST: Permission Deny ===")
+
+    tool_use_id = f"toolu_deny_{int(time.time())}"
+
+    # Inject permission
+    payload = {
+        "type": "permission_request",
+        "data": {
+            "tool_use_id": tool_use_id,
+            "session_id": tester.session_id,
+            "tool_name": "Write",
+            "tool_input": {"file_path": "/tmp/test.txt", "content": "test"},
+            "received_at": int(time.time() * 1000)
+        }
+    }
+    requests.post(f"{BASE_URL}/dev/inject/{tester.session_id}", json=payload)
+    tester.page.wait_for_timeout(500)
+
+    card = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id}"]')
+    if card.count() == 0:
+        print("❌ FAILED: Permission card not rendered")
+        return False
+
+    # Click deny
+    deny_btn = card.locator('[data-action="deny"]')
+    deny_btn.click()
+    tester.page.wait_for_timeout(800)
+
+    # Card should be gone
+    remaining = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id}"]')
+    if remaining.count() > 0:
+        print("❌ FAILED: Permission card still visible after deny")
+        return False
+
+    print("✅ PASSED: Permission deny works")
+    return True
+
+
+def test_multiple_pending_permissions(tester):
+    """Test multiple pending permissions render and resolve independently."""
+    print("\n=== TEST: Multiple Pending Permissions ===")
+
+    tool_use_id_1 = f"toolu_multi1_{int(time.time())}"
+    tool_use_id_2 = f"toolu_multi2_{int(time.time())}"
+
+    # Inject two permissions
+    for tool_id, tool_name in [(tool_use_id_1, "Bash"), (tool_use_id_2, "Write")]:
+        payload = {
+            "type": "permission_request",
+            "data": {
+                "tool_use_id": tool_id,
+                "session_id": tester.session_id,
+                "tool_name": tool_name,
+                "tool_input": {"command": "test"} if tool_name == "Bash" else {"file_path": "/tmp/x"},
+                "received_at": int(time.time() * 1000)
+            }
+        }
+        requests.post(f"{BASE_URL}/dev/inject/{tester.session_id}", json=payload)
+
+    tester.page.wait_for_timeout(500)
+
+    # Both should be visible
+    card1 = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id_1}"]')
+    card2 = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id_2}"]')
+
+    if card1.count() == 0 or card2.count() == 0:
+        print(f"❌ FAILED: Expected 2 cards, found {card1.count()} and {card2.count()}")
+        return False
+
+    # Approve first, verify second remains
+    card1.locator('[data-action="approve"]').click()
+    tester.page.wait_for_timeout(500)
+
+    card1_after = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id_1}"]')
+    card2_after = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id_2}"]')
+
+    if card1_after.count() > 0:
+        print("❌ FAILED: First card not removed after approve")
+        return False
+
+    if card2_after.count() == 0:
+        print("❌ FAILED: Second card incorrectly removed")
+        return False
+
+    # Clean up - approve second
+    card2_after.locator('[data-action="approve"]').click()
+    tester.page.wait_for_timeout(300)
+
+    print("✅ PASSED: Multiple permissions handled independently")
+    return True
+
+
+def test_rapid_clicks(tester):
+    """Test rapid button clicks don't cause issues (double-tap prevention)."""
+    print("\n=== TEST: Rapid Clicks (Double-tap Prevention) ===")
+
+    tool_id = f"toolu_rapid_{int(time.time())}"
+
+    # Inject question
+    tester.inject_message([{
+        "type": "tool_use",
+        "id": tool_id,
+        "name": "AskUserQuestion",
+        "input": {
+            "questions": [{
+                "question": "Rapid test?",
+                "header": "Rapid",
+                "multiSelect": False,
+                "options": [
+                    {"label": "A", "description": "Option A"},
+                    {"label": "B", "description": "Option B"}
+                ]
+            }]
+        }
+    }])
+
+    q_selector = f'[data-question-id*="{tool_id}"]'
+    question = tester.page.locator(q_selector)
+
+    if question.count() == 0:
+        print("❌ FAILED: Question not rendered")
+        return False
+
+    option = question.locator('.question-option').first
+
+    # Click once
+    option.click()
+
+    # Immediately check if button is disabled (double-tap prevention)
+    tester.page.wait_for_timeout(100)
+    is_disabled = option.evaluate('el => el.disabled || el.classList.contains("loading")')
+
+    if not is_disabled:
+        print("❌ FAILED: Button not disabled after click (double-tap prevention broken)")
+        return False
+
+    # Wait for answered state
+    tester.page.wait_for_timeout(600)
+    is_answered = question.first.evaluate('el => el.classList.contains("answered")')
+
+    if is_answered:
+        print("✅ PASSED: Double-tap prevention works (button disabled, question answered)")
+        return True
+    else:
+        print("❌ FAILED: Question not answered after click")
+        return False
+
+
 TESTS = {
     'multi-question': test_multi_question,
     'send-message': test_send_message,
     'exit-plan-mode': test_exit_plan_mode,
     'button-click': test_button_click,
+    'multiselect': test_multiselect,
+    'exit-plan-reject': test_exit_plan_reject,
+    'other-option': test_other_option,
+    'permission-approve': test_permission_approve,
+    'permission-deny': test_permission_deny,
+    'multiple-permissions': test_multiple_pending_permissions,
+    'rapid-clicks': test_rapid_clicks,
 }
 
 

@@ -160,6 +160,7 @@ curl -X POST ".../api/sessions/$ID/input" -d '{"text":"Hello Claude"}'
 | API Action | Sends | Use For |
 |------------|-------|---------|
 | `answer` | `text` + `Tab` + `Enter` | Numbered selections (questions, plan approval, permissions) |
+| `answer-multi` | Each index separately + `Tab` + `Enter` | Multi-select questions (toggles each option) |
 | `approve` | `y` + `Enter` | Simple y/n only (not numbered options!) |
 | `reject` | `n` + `Enter` | Simple y/n only |
 | `continue` | `Enter` | Continue prompts |

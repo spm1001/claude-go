@@ -776,9 +776,9 @@ elements.messagesContainer.addEventListener('click', (e) => {
     }
 
     if (indices.length === 0) {
-      sendInput('', null);
+      sendInput('', 'answer-multi');  // Empty selection still needs Tab+Enter
     } else {
-      sendInput(indices.join(','), null);
+      sendInput(indices.join(','), 'answer-multi');  // Toggle each, then Tab+Enter
     }
 
     setTimeout(() => {
@@ -836,6 +836,7 @@ elements.messagesContainer.addEventListener('click', (e) => {
     }, 500);
     return;
   }
+
 });
 
 // Event delegation for permission banner (approve/deny)
