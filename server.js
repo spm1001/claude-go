@@ -145,6 +145,25 @@ app.delete('/api/sessions/:id', async (req, res) => {
 });
 
 /**
+ * GET /api/sessions/:id/terminal
+ * Get raw terminal output for debugging
+ */
+app.get('/api/sessions/:id/terminal', async (req, res) => {
+  try {
+    const { execSync } = require('child_process');
+    const sessionName = `claude-${req.params.id}`;
+    const output = execSync(`tmux capture-pane -t "${sessionName}" -p`, {
+      encoding: 'utf-8',
+      timeout: 5000
+    });
+    res.type('text/plain').send(output);
+  } catch (err) {
+    console.error('Error capturing terminal:', err);
+    res.status(500).type('text/plain').send(`Error: ${err.message}`);
+  }
+});
+
+/**
  * GET /api/dropzone
  * List files in the drop zone
  */
