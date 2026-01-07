@@ -97,6 +97,51 @@ The JSONL format has quirks that affect parsing:
 
 **PATH:** Claude CLI lives in `~/.local/bin/`, which isn't in systemd's default PATH. The service file explicitly includes it.
 
+## Permission Handling: "Ask + Queue" Pattern
+
+Permission prompts are terminal-only (not in JSONL). We solve this with hooks:
+
+```
+Hook fires (PreToolUse)
+  ↓
+POST to Node.js server (notification)
+  ↓
+Return {"permissionDecision": "ask"} immediately  ← no blocking!
+  ↓
+Terminal prompt appears, waits indefinitely
+  ↓
+... user on train, hours later ...
+  ↓
+Mobile UI tap → server sends: tmux send-keys "1" Enter
+```
+
+**Why "ask"?** Returning `"ask"` tells Claude Code to show its normal terminal prompt. This decouples notification from approval — the hook doesn't block, the terminal prompt waits forever, user can respond whenever.
+
+**Key files:**
+- `hooks/claude-go-permission.sh` — POSTs to server, returns "ask"
+- `hooks/settings-snippet.json` — how to register in ~/.claude/settings.json
+- `server.js` — `/hook/permission`, `/hook/respond`, `/hook/pending` endpoints
+
+**Deployment requirement:** The hook must be registered in `~/.claude/settings.json` on kube.lan (where Claude sessions run). Project-level hooks don't work — must be global.
+
+## Hooks Gotchas
+
+**Project-level hooks don't work.** `.claude/settings.json` in a project directory is ignored for hooks. Must use `~/.claude/settings.json`.
+
+**Timeout is soft.** Documentation says 60s, but empirically Claude waits 65+ seconds for hooks to return.
+
+**Auto-approved tools still fire hooks.** If a tool is in the `permissions.allow` list, no prompt appears — but the hook still fires. The keystroke goes nowhere (or wrong place).
+
+**Hook input includes correlation ID:**
+```json
+{
+  "session_id": "a2b3fe34-...",
+  "tool_name": "Write",
+  "tool_input": { "file_path": "...", "content": "..." },
+  "tool_use_id": "toolu_01UASrrZ..."  ← use for correlation
+}
+```
+
 ## Related
 
 - `~/Repos/claude-code-web/` - Previous ttyd-based solution
