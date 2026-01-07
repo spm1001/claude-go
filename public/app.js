@@ -879,8 +879,8 @@ elements.backBtn.addEventListener('click', () => {
 });
 
 elements.terminalBtn.addEventListener('click', () => {
-  if (state.currentSessionId) {
-    window.open(`/api/sessions/${state.currentSessionId}/terminal`, '_blank');
+  if (state.currentSession) {
+    window.open(`/api/sessions/${state.currentSession}/terminal`, '_blank');
   }
 });
 
