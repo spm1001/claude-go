@@ -22,7 +22,9 @@ const state = {
   pendingPermissions: new Map(), // tool_use_id -> permission data
   answeredQuestions: new Set(),  // question IDs that have been answered
   respondingPermissions: new Set(), // permission IDs with in-flight responses
-  loadingQuestions: new Set() // question IDs with in-flight responses (for loading state)
+  loadingQuestions: new Set(), // question IDs with in-flight responses (for loading state)
+  // Bottom panel interaction state
+  currentInteraction: null, // { type, tool_use_id, questions, currentIndex, answers, multiSelectState }
 };
 
 // Save device ID for persistence across reloads
@@ -45,7 +47,13 @@ const elements = {
   messageInput: document.getElementById('message-input'),
   sendBtn: document.getElementById('send-btn'),
   takeoverBanner: document.getElementById('takeover-banner'),
-  takeBackBtn: document.getElementById('take-back-btn')
+  takeBackBtn: document.getElementById('take-back-btn'),
+  // Interaction panel elements
+  interactionPanel: document.getElementById('interaction-panel'),
+  interactionChip: document.querySelector('.interaction-chip'),
+  interactionProgress: document.querySelector('.interaction-progress'),
+  interactionQuestion: document.querySelector('.interaction-question'),
+  interactionOptions: document.querySelector('.interaction-options'),
 };
 
 // =============================================================================
@@ -143,6 +151,8 @@ function handleWebSocketMessage(msg) {
         addOrUpdateMessage(m);
       }
       scrollToBottom();
+      // Check for new interactions to show in bottom panel
+      checkForPendingInteractions();
       break;
 
     case 'reload':
@@ -286,6 +296,8 @@ async function loadSessionContent(sessionId) {
     }
 
     scrollToBottom();
+    // Check for pending interactions
+    checkForPendingInteractions();
   } catch (err) {
     console.error('Error loading session:', err);
     elements.messagesContainer.innerHTML = '<p class="loading">Error loading conversation</p>';
@@ -491,6 +503,44 @@ function scrollToBottom() {
 
 function handleSend() {
   const text = elements.messageInput.value.trim();
+  const interaction = state.currentInteraction;
+
+  // Handle contextual submit based on current interaction
+  if (interaction) {
+    if (interaction.type === 'question') {
+      // "Other..." or "Submit" for questions
+      const question = interaction.questions[interaction.currentIndex];
+      if (question.multiSelect) {
+        // Multi-select: submit selections (and typed text if any)
+        submitQuestionAnswer(text || null);
+      } else if (text) {
+        // Single-select with typed text: send as "Other"
+        submitQuestionAnswer(text);
+      }
+      // If no text and single-select, ignore (user should tap an option)
+      elements.messageInput.value = '';
+      elements.messageInput.style.height = 'auto';
+      return;
+    } else if (interaction.type === 'plan' && text) {
+      // "Edit..." - send feedback and reject
+      state.answeredQuestions.add(`plan-${interaction.tool_use_id}`);
+      sendInput(text, null); // Send feedback as message
+      clearInteractionPanel();
+      elements.messageInput.value = '';
+      elements.messageInput.style.height = 'auto';
+      return;
+    } else if (interaction.type === 'permission' && text) {
+      // Send instructions after dismissing permission
+      handleDismiss();
+      // Then send the instructions as a follow-up message
+      sendInput(text, null);
+      elements.messageInput.value = '';
+      elements.messageInput.style.height = 'auto';
+      return;
+    }
+  }
+
+  // Normal message send
   if (!text) return;
 
   // Slash commands are terminal-local (don't appear in JSONL), so skip optimistic display
@@ -542,6 +592,8 @@ function handlePermissionRequest(permission) {
   console.log('Permission request:', permission);
   state.pendingPermissions.set(permission.tool_use_id, permission);
   renderPermissionBanner();
+  // Also show in bottom panel (takes priority)
+  checkForPendingInteractions();
 }
 
 /**
@@ -551,6 +603,12 @@ function handlePermissionResolved(data) {
   console.log('Permission resolved:', data);
   state.pendingPermissions.delete(data.tool_use_id);
   renderPermissionBanner();
+  // Clear from bottom panel if it was showing this permission
+  if (state.currentInteraction?.tool_use_id === data.tool_use_id) {
+    clearInteractionPanel();
+  }
+  // Check for next pending interaction
+  checkForPendingInteractions();
 }
 
 /**
@@ -663,6 +721,352 @@ async function respondToPermission(toolUseId, sessionId, approved) {
 }
 
 // Permission handlers are now via event delegation (see Event Listeners section)
+
+// =============================================================================
+// Interaction Panel (Unified Bottom Panel)
+// =============================================================================
+
+/**
+ * Show an AskUserQuestion in the bottom panel
+ */
+function showQuestionInPanel(toolUseId, questions) {
+  // Don't show if already answered
+  const firstQuestionId = `q-${toolUseId}-0`;
+  if (state.answeredQuestions.has(firstQuestionId)) return;
+
+  state.currentInteraction = {
+    type: 'question',
+    tool_use_id: toolUseId,
+    questions: questions,
+    currentIndex: 0,
+    answers: [],
+    multiSelectState: {} // { optionIndex: boolean }
+  };
+
+  renderInteractionPanel();
+}
+
+/**
+ * Show a permission prompt in the bottom panel
+ */
+function showPermissionInPanel(permission) {
+  state.currentInteraction = {
+    type: 'permission',
+    tool_use_id: permission.tool_use_id,
+    session_id: permission.session_id,
+    tool_name: permission.tool_name,
+    tool_input: permission.tool_input
+  };
+
+  renderInteractionPanel();
+}
+
+/**
+ * Show ExitPlanMode in the bottom panel
+ */
+function showPlanInPanel(toolUseId) {
+  const planId = `plan-${toolUseId}`;
+  if (state.answeredQuestions.has(planId)) return;
+
+  state.currentInteraction = {
+    type: 'plan',
+    tool_use_id: toolUseId
+  };
+
+  renderInteractionPanel();
+}
+
+/**
+ * Clear the interaction panel
+ */
+function clearInteractionPanel() {
+  state.currentInteraction = null;
+  elements.interactionPanel.classList.add('hidden');
+  elements.sendBtn.textContent = 'Send';
+  elements.messageInput.placeholder = 'Message Claude...';
+}
+
+/**
+ * Mark inline cards as answered (update DOM directly)
+ */
+function markInlineCardAnswered(toolUseId, type) {
+  if (type === 'question') {
+    // Find all question cards for this tool_use_id
+    document.querySelectorAll(`.ask-user-question[data-question-id^="q-${toolUseId}"]`).forEach(el => {
+      el.classList.add('answered');
+    });
+  } else if (type === 'plan') {
+    document.querySelectorAll(`.exit-plan-mode[data-plan-id="plan-${toolUseId}"]`).forEach(el => {
+      el.classList.add('answered');
+    });
+  }
+}
+
+/**
+ * Render the interaction panel based on current state
+ */
+function renderInteractionPanel() {
+  const interaction = state.currentInteraction;
+
+  if (!interaction) {
+    elements.interactionPanel.classList.add('hidden');
+    elements.sendBtn.textContent = 'Send';
+    elements.messageInput.placeholder = 'Message Claude...';
+    return;
+  }
+
+  elements.interactionPanel.classList.remove('hidden');
+
+  if (interaction.type === 'question') {
+    renderQuestionPanel(interaction);
+  } else if (interaction.type === 'permission') {
+    renderPermissionPanel(interaction);
+  } else if (interaction.type === 'plan') {
+    renderPlanPanel(interaction);
+  }
+}
+
+/**
+ * Render AskUserQuestion in the panel
+ */
+function renderQuestionPanel(interaction) {
+  const question = interaction.questions[interaction.currentIndex];
+  const isMultiSelect = question.multiSelect;
+  const isLastQuestion = interaction.currentIndex === interaction.questions.length - 1;
+  const totalQuestions = interaction.questions.length;
+
+  // Header
+  elements.interactionChip.textContent = `□ ${question.header || 'Question'}`;
+  elements.interactionProgress.textContent = totalQuestions > 1
+    ? `(${interaction.currentIndex + 1}/${totalQuestions})`
+    : '';
+
+  // Question text
+  elements.interactionQuestion.textContent = question.question;
+
+  // Options
+  let optionsHtml = question.options.map((opt, i) => {
+    const index = i + 1;
+    const isSelected = interaction.multiSelectState[index];
+    const selectedClass = isSelected ? ' selected' : '';
+    const checkbox = isMultiSelect
+      ? `<span class="option-checkbox">${isSelected ? '[✓]' : '[ ]'}</span>`
+      : `<span class="option-number">${index}.</span>`;
+
+    return `
+      <button class="interaction-option${selectedClass}" data-action="select-option" data-index="${index}">
+        <div>
+          ${checkbox}
+          <span class="option-label">${escapeHtml(opt.label)}</span>
+        </div>
+        ${opt.description ? `<span class="option-desc">${escapeHtml(opt.description)}</span>` : ''}
+      </button>
+    `;
+  }).join('');
+
+  elements.interactionOptions.innerHTML = optionsHtml;
+
+  // Update send button label
+  if (isMultiSelect) {
+    elements.sendBtn.textContent = 'Submit';
+  } else if (isLastQuestion && totalQuestions > 1) {
+    elements.sendBtn.textContent = 'Submit';
+  } else {
+    elements.sendBtn.textContent = 'Other…';
+  }
+
+  elements.messageInput.placeholder = 'Type something...';
+}
+
+/**
+ * Render permission prompt in the panel
+ */
+function renderPermissionPanel(interaction) {
+  // Header
+  elements.interactionChip.textContent = `⚠ ${interaction.tool_name}`;
+  elements.interactionProgress.textContent = '';
+
+  // Preview (file path, command, etc)
+  const preview = formatToolInput(interaction.tool_name, interaction.tool_input);
+  elements.interactionQuestion.innerHTML = `<div class="interaction-preview">${escapeHtml(preview)}</div>`;
+
+  // Permission buttons
+  elements.interactionOptions.innerHTML = `
+    <div class="permission-buttons">
+      <button class="perm-btn approve" data-action="perm-approve">Approve</button>
+      <button class="perm-btn always" data-action="perm-always">Always</button>
+      <button class="perm-btn deny" data-action="perm-deny">Deny</button>
+    </div>
+  `;
+
+  elements.sendBtn.textContent = 'Send';
+  elements.messageInput.placeholder = 'Instructions for Claude...';
+}
+
+/**
+ * Render plan approval in the panel
+ */
+function renderPlanPanel(interaction) {
+  elements.interactionChip.textContent = '□ Plan Ready';
+  elements.interactionProgress.textContent = '';
+  elements.interactionQuestion.textContent = '(tap to scroll to plan above)';
+
+  elements.interactionOptions.innerHTML = `
+    <div class="permission-buttons">
+      <button class="perm-btn approve" data-action="plan-approve">Approve</button>
+      <button class="perm-btn deny" data-action="plan-reject">Reject</button>
+    </div>
+  `;
+
+  elements.sendBtn.textContent = 'Edit…';
+  elements.messageInput.placeholder = 'Feedback on plan...';
+}
+
+/**
+ * Handle option selection in question panel
+ */
+function handleOptionSelect(index) {
+  const interaction = state.currentInteraction;
+  if (!interaction || interaction.type !== 'question') return;
+
+  const question = interaction.questions[interaction.currentIndex];
+
+  if (question.multiSelect) {
+    // Toggle selection
+    interaction.multiSelectState[index] = !interaction.multiSelectState[index];
+    renderInteractionPanel();
+  } else {
+    // Single select - send immediately
+    submitQuestionAnswer(String(index));
+  }
+}
+
+/**
+ * Submit the current question answer
+ */
+function submitQuestionAnswer(answer) {
+  const interaction = state.currentInteraction;
+  if (!interaction || interaction.type !== 'question') return;
+
+  const question = interaction.questions[interaction.currentIndex];
+  const isMultiSelect = question.multiSelect;
+  const isLastQuestion = interaction.currentIndex === interaction.questions.length - 1;
+
+  // For multi-select, build answer from selected options
+  if (isMultiSelect && !answer) {
+    const selected = Object.entries(interaction.multiSelectState)
+      .filter(([_, v]) => v)
+      .map(([k, _]) => k);
+    answer = selected.join(',');
+  }
+
+  // Mark question as answered
+  const questionId = `q-${interaction.tool_use_id}-${interaction.currentIndex}`;
+  state.answeredQuestions.add(questionId);
+
+  // Send the answer
+  // For typed text (not a number), send directly without 'answer' action
+  const isTypedText = isNaN(parseInt(answer, 10));
+  if (isMultiSelect) {
+    sendInput(answer, 'answer-multi');
+  } else if (isTypedText) {
+    // Typed "Other" response - need to select option N+1 (Type something), type text, submit
+    // Format: "optionCount:text" so server knows which option to select
+    const optionCount = question.options.length;
+    sendInput(`${optionCount}:${answer}`, 'other');
+  } else {
+    sendInput(answer, 'answer');
+  }
+
+  // Move to next question or finish
+  if (isLastQuestion) {
+    // Mark all inline cards for this question as answered
+    markInlineCardAnswered(interaction.tool_use_id, 'question');
+    clearInteractionPanel();
+  } else {
+    interaction.currentIndex++;
+    interaction.multiSelectState = {};
+    renderInteractionPanel();
+  }
+}
+
+/**
+ * Handle dismiss button
+ */
+function handleDismiss() {
+  const interaction = state.currentInteraction;
+  if (!interaction) return;
+
+  // Send escape
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify({ type: 'escape' }));
+  }
+
+  // Mark as answered and update inline cards
+  if (interaction.type === 'question') {
+    for (let i = 0; i < interaction.questions.length; i++) {
+      state.answeredQuestions.add(`q-${interaction.tool_use_id}-${i}`);
+    }
+    markInlineCardAnswered(interaction.tool_use_id, 'question');
+  } else if (interaction.type === 'plan') {
+    state.answeredQuestions.add(`plan-${interaction.tool_use_id}`);
+    markInlineCardAnswered(interaction.tool_use_id, 'plan');
+  } else if (interaction.type === 'permission') {
+    // Remove from pending permissions
+    state.pendingPermissions.delete(interaction.tool_use_id);
+    renderPermissionBanner();
+  }
+
+  clearInteractionPanel();
+}
+
+/**
+ * Check messages for pending interactions and show in panel
+ */
+function checkForPendingInteractions() {
+  // Priority: permissions > questions > plans
+
+  // 1. Check pending permissions
+  if (state.pendingPermissions.size > 0) {
+    const firstPerm = state.pendingPermissions.values().next().value;
+    if (!state.currentInteraction || state.currentInteraction.tool_use_id !== firstPerm.tool_use_id) {
+      showPermissionInPanel(firstPerm);
+    }
+    return;
+  }
+
+  // 2. Check for unanswered questions in messages
+  for (const msg of state.messages) {
+    if (msg.type !== 'assistant' || !Array.isArray(msg.content)) continue;
+
+    for (const block of msg.content) {
+      if (block.type === 'tool_use' && block.name === 'AskUserQuestion' && block.input?.questions) {
+        const questionId = `q-${block.id}-0`;
+        if (!state.answeredQuestions.has(questionId)) {
+          if (!state.currentInteraction || state.currentInteraction.tool_use_id !== block.id) {
+            showQuestionInPanel(block.id, block.input.questions);
+          }
+          return;
+        }
+      }
+
+      if (block.type === 'tool_use' && block.name === 'ExitPlanMode') {
+        const planId = `plan-${block.id}`;
+        if (!state.answeredQuestions.has(planId)) {
+          if (!state.currentInteraction || state.currentInteraction.tool_use_id !== block.id) {
+            showPlanInPanel(block.id);
+          }
+          return;
+        }
+      }
+    }
+  }
+
+  // No pending interactions
+  if (state.currentInteraction) {
+    clearInteractionPanel();
+  }
+}
 
 // =============================================================================
 // Utility Functions
@@ -831,12 +1235,12 @@ elements.messagesContainer.addEventListener('click', (e) => {
 
 });
 
-// Event delegation for permission banner (approve/deny)
+// Event delegation for permission banner (approve/deny) - legacy, keeping for now
 document.addEventListener('click', (e) => {
   const target = e.target;
 
-  // Approve permission
-  const approveBtn = target.closest('[data-action="approve"]');
+  // Approve permission (legacy banner)
+  const approveBtn = target.closest('.permission-card [data-action="approve"]');
   if (approveBtn) {
     const card = approveBtn.closest('.permission-card');
     if (card) {
@@ -845,12 +1249,88 @@ document.addEventListener('click', (e) => {
     return;
   }
 
-  // Deny permission
-  const denyBtn = target.closest('[data-action="deny"]');
+  // Deny permission (legacy banner)
+  const denyBtn = target.closest('.permission-card [data-action="deny"]');
   if (denyBtn) {
     const card = denyBtn.closest('.permission-card');
     if (card) {
       respondToPermission(card.dataset.toolUseId, card.dataset.sessionId, false);
+    }
+    return;
+  }
+});
+
+// Event delegation for interaction panel
+elements.interactionPanel?.addEventListener('click', (e) => {
+  const target = e.target;
+
+  // Dismiss button
+  if (target.closest('[data-action="dismiss"]')) {
+    handleDismiss();
+    return;
+  }
+
+  // Question option select
+  const optionBtn = target.closest('[data-action="select-option"]');
+  if (optionBtn) {
+    const index = parseInt(optionBtn.dataset.index, 10);
+    handleOptionSelect(index);
+    return;
+  }
+
+  // Permission approve
+  if (target.closest('[data-action="perm-approve"]')) {
+    const interaction = state.currentInteraction;
+    if (interaction?.type === 'permission') {
+      respondToPermission(interaction.tool_use_id, interaction.session_id, true);
+      clearInteractionPanel();
+    }
+    return;
+  }
+
+  // Permission always
+  if (target.closest('[data-action="perm-always"]')) {
+    const interaction = state.currentInteraction;
+    if (interaction?.type === 'permission') {
+      // Send "3" for always trust
+      sendInput('3', 'answer');
+      state.pendingPermissions.delete(interaction.tool_use_id);
+      clearInteractionPanel();
+      renderPermissionBanner(); // Update legacy banner too
+    }
+    return;
+  }
+
+  // Permission deny
+  if (target.closest('[data-action="perm-deny"]')) {
+    const interaction = state.currentInteraction;
+    if (interaction?.type === 'permission') {
+      respondToPermission(interaction.tool_use_id, interaction.session_id, false);
+      clearInteractionPanel();
+    }
+    return;
+  }
+
+  // Plan approve
+  if (target.closest('[data-action="plan-approve"]')) {
+    const interaction = state.currentInteraction;
+    if (interaction?.type === 'plan') {
+      state.answeredQuestions.add(`plan-${interaction.tool_use_id}`);
+      markInlineCardAnswered(interaction.tool_use_id, 'plan');
+      sendInput('y', null);
+      clearInteractionPanel();
+    }
+    return;
+  }
+
+  // Plan reject
+  if (target.closest('[data-action="plan-reject"]')) {
+    const interaction = state.currentInteraction;
+    if (interaction?.type === 'plan') {
+      state.answeredQuestions.add(`plan-${interaction.tool_use_id}`);
+      markInlineCardAnswered(interaction.tool_use_id, 'plan');
+      sendInput('n', null);
+      clearInteractionPanel();
     }
     return;
   }

@@ -635,6 +635,180 @@ button {
   border-top: 1px solid var(--border);
 }
 
+/* Interaction Panel (questions, permissions, plans) */
+#interaction-panel {
+  margin-bottom: var(--space-md);
+}
+
+#interaction-panel.hidden {
+  display: none;
+}
+
+.interaction-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.interaction-chip {
+  background: var(--bg-tertiary);
+  color: var(--warning);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: 4px;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.interaction-progress {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.interaction-header .dismiss-btn {
+  margin-left: auto;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: 4px;
+  font-size: var(--font-size-sm);
+  min-height: 32px;
+}
+
+.interaction-header .dismiss-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.interaction-question {
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+  line-height: 1.4;
+}
+
+.interaction-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+/* Option buttons for questions */
+.interaction-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  padding: var(--space-md);
+  border-radius: var(--border-radius);
+  text-align: left;
+  min-height: var(--tap-target);
+  cursor: pointer;
+}
+
+.interaction-option:hover {
+  border-color: var(--warning);
+  background: var(--bg-primary);
+}
+
+.interaction-option:active {
+  transform: scale(0.98);
+}
+
+.interaction-option .option-number {
+  color: var(--warning);
+  font-weight: 500;
+  margin-right: var(--space-sm);
+}
+
+.interaction-option .option-label {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.interaction-option .option-desc {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-xs);
+}
+
+/* Checkbox for multi-select */
+.interaction-option .option-checkbox {
+  color: var(--text-muted);
+  margin-right: var(--space-sm);
+  font-family: var(--font-mono);
+}
+
+.interaction-option.selected {
+  border-color: var(--warning);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.interaction-option.selected .option-checkbox {
+  color: var(--warning);
+}
+
+/* Permission buttons (Approve/Always/Deny in a row) */
+.permission-buttons {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.permission-buttons .perm-btn {
+  flex: 1;
+  min-height: var(--tap-target);
+  font-weight: 500;
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-base);
+}
+
+.permission-buttons .perm-btn.approve {
+  background: var(--success);
+  color: white;
+}
+
+.permission-buttons .perm-btn.approve:hover {
+  background: #16a34a;
+}
+
+.permission-buttons .perm-btn.always {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--success);
+}
+
+.permission-buttons .perm-btn.always:hover {
+  background: var(--success);
+  color: white;
+}
+
+.permission-buttons .perm-btn.deny {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.permission-buttons .perm-btn.deny:hover {
+  background: var(--error);
+  color: white;
+  border-color: var(--error);
+}
+
+/* Permission preview (file path, command, etc) */
+.interaction-preview {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--border-radius);
+  margin-bottom: var(--space-md);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #quick-actions {
   display: flex;
   gap: var(--space-sm);

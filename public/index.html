@@ -46,11 +46,21 @@
       </div>
 
       <div id="input-area">
+        <!-- Interaction panel (shown when question/permission/plan pending) -->
+        <div id="interaction-panel" class="hidden">
+          <div class="interaction-header">
+            <span class="interaction-chip">□ Header</span>
+            <span class="interaction-progress"></span>
+            <button class="dismiss-btn" data-action="dismiss">Dismiss</button>
+          </div>
+          <div class="interaction-question"></div>
+          <div class="interaction-options"></div>
+        </div>
+        <!-- Quick actions (legacy, keeping for Stop button) -->
         <div id="quick-actions" class="hidden">
-          <button class="action-btn" data-action="approve">Approve</button>
-          <button class="action-btn" data-action="reject">Reject</button>
           <button class="action-btn" data-action="interrupt">Stop</button>
         </div>
+        <!-- Input row (always present, button label changes) -->
         <div class="input-row">
           <textarea id="message-input" placeholder="Message Claude..." rows="1" autocomplete="off"></textarea>
           <button id="send-btn" class="primary-btn">Send</button>

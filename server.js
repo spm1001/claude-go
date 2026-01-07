@@ -438,6 +438,11 @@ wss.on('connection', (ws, req) => {
           // Send Ctrl+C
           await require('./lib/sessions').sendInterrupt(sessionId);
           break;
+
+        case 'escape':
+          // Send Escape key (dismiss dialogs)
+          await require('./lib/sessions').sendKeys(sessionId, 'Escape');
+          break;
       }
     } catch (err) {
       console.error('WebSocket message error:', err);
