@@ -6,6 +6,7 @@
  */
 
 const express = require('express');
+const fs = require('fs');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
@@ -56,6 +57,7 @@ if (process.env.NODE_ENV !== 'production') {
 // Track connected clients per session
 const sessionClients = new Map(); // sessionId -> Set<WebSocket>
 const deviceLeases = new Map();   // sessionId -> { deviceId, lastHeartbeat }
+const sessionMetadata = new Map(); // sessionId -> { cwd }
 
 // Track pending permission requests
 // Key: tool_use_id, Value: { session_id, tool_name, tool_input, received_at }
@@ -86,8 +88,12 @@ app.get('/api/sessions', async (req, res) => {
 app.post('/api/sessions', async (req, res) => {
   try {
     const { cwd } = req.body;
-    const session = await require('./lib/sessions').createSession(cwd || REPOS_DIR);
-    res.json(session);
+    // Resolve symlinks (e.g., /tmp → /private/tmp on macOS)
+    const resolvedCwd = fs.realpathSync(cwd || REPOS_DIR);
+    const session = await require('./lib/sessions').createSession(resolvedCwd);
+    // Store metadata for later (watcher needs the cwd)
+    sessionMetadata.set(session.id, { cwd: resolvedCwd });
+    res.json({ ...session, cwd: resolvedCwd });
   } catch (err) {
     console.error('Error creating session:', err);
     res.status(500).json({ error: err.message });
@@ -100,7 +106,8 @@ app.post('/api/sessions', async (req, res) => {
  */
 app.get('/api/sessions/:id', async (req, res) => {
   try {
-    const content = await require('./lib/jsonl').readSession(req.params.id);
+    const metadata = sessionMetadata.get(req.params.id);
+    const content = await require('./lib/jsonl').readSession(req.params.id, metadata?.cwd);
     res.json(content);
   } catch (err) {
     console.error('Error reading session:', err);
@@ -327,7 +334,8 @@ if (process.env.NODE_ENV !== 'production') {
   app.get('/dev/messages/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     try {
-      const messages = await require('./lib/jsonl').readSession(sessionId);
+      const metadata = sessionMetadata.get(sessionId);
+      const messages = await require('./lib/jsonl').readSession(sessionId, metadata?.cwd);
       res.json(messages);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -376,11 +384,12 @@ wss.on('connection', (ws, req) => {
 
   // Start watching the JSONL file for this session
   const jsonl = require('./lib/jsonl');
+  const metadata = sessionMetadata.get(sessionId);
   const unwatch = jsonl.watchSession(sessionId, (event, data) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: event, data }));
     }
-  });
+  }, metadata?.cwd);
 
   // Handle messages from client
   ws.on('message', async (message) => {
