@@ -13,6 +13,15 @@ CLAUDE_GO_URL="${CLAUDE_GO_URL:-http://localhost:7682}"
 # Read hook input from stdin
 INPUT=$(cat)
 
+# Extract tool name - skip tools with inline UI rendering
+TOOL_NAME=$(echo "$INPUT" | grep -o '"tool_name":"[^"]*"' | cut -d'"' -f4)
+case "$TOOL_NAME" in
+  AskUserQuestion|TodoWrite)
+    # These have proper inline rendering, don't show permission card
+    exit 0
+    ;;
+esac
+
 # POST to Claude Go server (fire and forget - don't block on response)
 # Use timeout to ensure we don't hang if server is unreachable
 curl -s -X POST \
