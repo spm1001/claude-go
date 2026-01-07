@@ -85,9 +85,20 @@ class ClaudeGoTester:
         }''')
 
     def click_question_option(self, question_id, option_index=0):
-        """Click an option on a question."""
-        self.page.locator(f'[data-question-id="{question_id}"] .question-option').nth(option_index).click()
+        """Click an option in the interaction panel (not inline card)."""
+        # Panel options use data-action="select-option" with data-index
+        self.page.locator(f'#interaction-panel .interaction-option[data-index="{option_index}"]').click()
         self.page.wait_for_timeout(600)
+
+    def click_panel_option(self, option_index=0):
+        """Click an option in the panel by index."""
+        self.page.locator(f'#interaction-panel .interaction-option').nth(option_index).click()
+        self.page.wait_for_timeout(600)
+
+    def panel_visible(self):
+        """Check if the interaction panel is visible."""
+        panel = self.page.locator('#interaction-panel')
+        return panel.count() > 0 and not panel.evaluate('el => el.classList.contains("hidden")')
 
     def send_message(self, text):
         """Type and send a message."""
@@ -105,7 +116,7 @@ class ClaudeGoTester:
 
 
 def test_multi_question(tester):
-    """Test that multi-question prompts can be answered in sequence."""
+    """Test that multi-question prompts can be answered via panel."""
     print("\n=== TEST: Multi-Question Flow ===")
 
     tool_id = f"toolu_test_{int(time.time())}"
@@ -133,42 +144,50 @@ def test_multi_question(tester):
         }
     }])
 
-    # Find our questions
+    # Verify panel renders with question
+    if not tester.panel_visible():
+        print("❌ FAILED: Interaction panel not visible")
+        return False
+
+    # Find inline cards for verification
     questions = tester.get_questions()
     our_qs = [q for q in questions if q['id'] and tool_id in q['id']]
 
     if len(our_qs) != 2:
-        print(f"❌ FAILED: Expected 2 questions, found {len(our_qs)}")
+        print(f"❌ FAILED: Expected 2 inline question cards, found {len(our_qs)}")
         return False
 
-    # Answer Q1
-    print(f"  Answering Q1: {our_qs[0]['header']}")
-    tester.click_question_option(our_qs[0]['id'], 0)
+    # Answer Q1 via panel (click first option)
+    print(f"  Answering Q1 via panel")
+    tester.click_panel_option(0)
 
     questions = tester.get_questions()
     q1_state = next((q for q in questions if q['id'] == our_qs[0]['id']), None)
     q2_state = next((q for q in questions if q['id'] == our_qs[1]['id']), None)
 
     if not q1_state['answered']:
-        print("❌ FAILED: Q1 not marked answered after click")
+        print("❌ FAILED: Q1 inline card not marked answered after panel click")
         return False
 
     if q2_state['answered']:
         print("❌ FAILED: Q2 incorrectly marked answered")
         return False
 
-    # Answer Q2
-    print(f"  Answering Q2: {our_qs[1]['header']}")
-    tester.click_question_option(our_qs[1]['id'], 0)
+    # Panel should now show Q2
+    tester.page.wait_for_timeout(300)
+
+    # Answer Q2 via panel
+    print(f"  Answering Q2 via panel")
+    tester.click_panel_option(0)
 
     questions = tester.get_questions()
     q2_state = next((q for q in questions if q['id'] == our_qs[1]['id']), None)
 
     if not q2_state['answered']:
-        print("❌ FAILED: Q2 not marked answered after click")
+        print("❌ FAILED: Q2 not marked answered after panel click")
         return False
 
-    print("✅ PASSED: Multi-question flow works")
+    print("✅ PASSED: Multi-question flow works via panel")
     return True
 
 
@@ -192,7 +211,7 @@ def test_send_message(tester):
 
 
 def test_exit_plan_mode(tester):
-    """Test ExitPlanMode approve/reject."""
+    """Test ExitPlanMode approve via panel."""
     print("\n=== TEST: ExitPlanMode ===")
 
     tool_id = f"toolu_plan_{int(time.time())}"
@@ -205,25 +224,37 @@ def test_exit_plan_mode(tester):
         "input": {"plan": "## Test Plan\n1. Step one\n2. Step two"}
     }])
 
-    # Find and click approve
-    plan = tester.page.locator(f'[data-plan-id="plan-{tool_id}"]')
-    if plan.count() == 0:
-        print("❌ FAILED: Plan not rendered")
+    # Verify panel renders with plan approve/reject
+    if not tester.panel_visible():
+        print("❌ FAILED: Interaction panel not visible")
         return False
 
-    tester.page.locator(f'[data-plan-id="plan-{tool_id}"] [data-action="approve-plan"]').click()
+    # Find inline plan card for verification
+    plan = tester.page.locator(f'[data-plan-id="plan-{tool_id}"]')
+    if plan.count() == 0:
+        print("❌ FAILED: Inline plan card not rendered")
+        return False
+
+    # Click approve in panel (not inline)
+    approve_btn = tester.page.locator('#interaction-panel [data-action="plan-approve"]')
+    if approve_btn.count() == 0:
+        print("❌ FAILED: Panel approve button not found")
+        return False
+
+    approve_btn.click()
     tester.page.wait_for_timeout(600)
 
+    # Check inline card is marked answered
     is_answered = tester.page.evaluate(f'''() => {{
         const plan = document.querySelector('[data-plan-id="plan-{tool_id}"]');
         return plan?.classList.contains('answered');
     }}''')
 
     if is_answered:
-        print("✅ PASSED: ExitPlanMode works")
+        print("✅ PASSED: ExitPlanMode works via panel")
         return True
     else:
-        print("❌ FAILED: Plan not marked answered")
+        print("❌ FAILED: Plan inline card not marked answered")
         return False
 
 
@@ -283,7 +314,7 @@ def test_button_click(tester):
 
 
 def test_multiselect(tester):
-    """Test multi-select question (toggle options, submit)."""
+    """Test multi-select question via panel (toggle options, submit)."""
     print("\n=== TEST: MultiSelect Question ===")
 
     tool_id = f"toolu_multi_{int(time.time())}"
@@ -307,58 +338,58 @@ def test_multiselect(tester):
         }
     }])
 
-    # Find the question
-    q_selector = f'[data-question-id*="{tool_id}"]'
-    question = tester.page.locator(q_selector)
-
-    if question.count() == 0:
-        print("❌ FAILED: Multi-select question not rendered")
+    # Verify panel renders
+    if not tester.panel_visible():
+        print("❌ FAILED: Interaction panel not visible")
         return False
 
-    # Should have toggle buttons, not select buttons
-    toggle_btns = question.locator('[data-action="toggle"]')
-    submit_btn = question.locator('[data-action="submit-multi"]')
+    # Panel should have toggle buttons for multi-select
+    panel = tester.page.locator('#interaction-panel')
+    toggle_btns = panel.locator('.interaction-option')
+    submit_btn = panel.locator('[data-action="submit-multi"]')
 
     if toggle_btns.count() != 3:
-        print(f"❌ FAILED: Expected 3 toggle buttons, found {toggle_btns.count()}")
+        print(f"❌ FAILED: Expected 3 options in panel, found {toggle_btns.count()}")
         return False
 
     if submit_btn.count() != 1:
-        print(f"❌ FAILED: Expected 1 submit button, found {submit_btn.count()}")
+        print(f"❌ FAILED: Expected 1 submit button in panel, found {submit_btn.count()}")
         return False
 
-    # Toggle first and third options
+    # Toggle first and third options in panel
     toggle_btns.nth(0).click()
     tester.page.wait_for_timeout(200)
     toggle_btns.nth(2).click()
     tester.page.wait_for_timeout(200)
 
-    # Verify selection state
+    # Verify selection state in panel
     btn1_selected = toggle_btns.nth(0).evaluate('el => el.classList.contains("selected")')
     btn2_selected = toggle_btns.nth(1).evaluate('el => el.classList.contains("selected")')
     btn3_selected = toggle_btns.nth(2).evaluate('el => el.classList.contains("selected")')
 
     if not (btn1_selected and not btn2_selected and btn3_selected):
-        print(f"❌ FAILED: Toggle state wrong: {btn1_selected}, {btn2_selected}, {btn3_selected}")
+        print(f"❌ FAILED: Panel toggle state wrong: {btn1_selected}, {btn2_selected}, {btn3_selected}")
         return False
 
-    # Submit
+    # Submit via panel
     submit_btn.click()
     tester.page.wait_for_timeout(600)
 
-    # Check answered state
+    # Check inline card is marked answered
+    q_selector = f'[data-question-id*="{tool_id}"]'
+    question = tester.page.locator(q_selector)
     is_answered = question.first.evaluate('el => el.classList.contains("answered")')
 
     if is_answered:
-        print("✅ PASSED: Multi-select UI works (toggle + submit)")
+        print("✅ PASSED: Multi-select works via panel (toggle + submit)")
         return True
     else:
-        print("❌ FAILED: Question not marked answered after submit")
+        print("❌ FAILED: Inline card not marked answered after panel submit")
         return False
 
 
 def test_exit_plan_reject(tester):
-    """Test ExitPlanMode reject button."""
+    """Test ExitPlanMode reject via panel."""
     print("\n=== TEST: ExitPlanMode Reject ===")
 
     tool_id = f"toolu_reject_{int(time.time())}"
@@ -371,16 +402,22 @@ def test_exit_plan_reject(tester):
         "input": {"plan": "## Plan to Reject\n1. Bad step"}
     }])
 
+    # Verify panel renders
+    if not tester.panel_visible():
+        print("❌ FAILED: Interaction panel not visible")
+        return False
+
     plan_selector = f'[data-plan-id="plan-{tool_id}"]'
     plan = tester.page.locator(plan_selector)
 
     if plan.count() == 0:
-        print("❌ FAILED: Plan not rendered")
+        print("❌ FAILED: Inline plan card not rendered")
         return False
 
-    reject_btn = plan.locator('[data-action="reject-plan"]')
+    # Click reject in panel
+    reject_btn = tester.page.locator('#interaction-panel [data-action="plan-reject"]')
     if reject_btn.count() == 0:
-        print("❌ FAILED: Reject button not found")
+        print("❌ FAILED: Panel reject button not found")
         return False
 
     reject_btn.click()
@@ -389,10 +426,10 @@ def test_exit_plan_reject(tester):
     is_answered = plan.first.evaluate('el => el.classList.contains("answered")')
 
     if is_answered:
-        print("✅ PASSED: ExitPlanMode reject works")
+        print("✅ PASSED: ExitPlanMode reject works via panel")
         return True
     else:
-        print("❌ FAILED: Plan not marked answered after reject")
+        print("❌ FAILED: Inline card not marked answered after panel reject")
         return False
 
 
@@ -448,7 +485,7 @@ def test_other_option(tester):
 
 
 def test_permission_approve(tester):
-    """Test permission card approve button."""
+    """Test permission approve via panel."""
     print("\n=== TEST: Permission Approve ===")
 
     tool_use_id = f"toolu_perm_{int(time.time())}"
@@ -471,35 +508,37 @@ def test_permission_approve(tester):
 
     tester.page.wait_for_timeout(500)
 
-    # Find permission card
-    card = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id}"]')
-    if card.count() == 0:
-        print("❌ FAILED: Permission card not rendered")
+    # Verify panel shows permission UI
+    if not tester.panel_visible():
+        print("❌ FAILED: Interaction panel not visible for permission")
         return False
 
-    # Verify tool name shown
-    tool_name = card.locator('.permission-tool').text_content()
-    if 'Bash' not in tool_name:
-        print(f"❌ FAILED: Expected 'Bash' in tool name, got '{tool_name}'")
+    # Panel should show permission with approve/always/deny buttons
+    approve_btn = tester.page.locator('#interaction-panel [data-action="perm-approve"]')
+    if approve_btn.count() == 0:
+        print("❌ FAILED: Panel approve button not found")
         return False
 
-    # Click approve
-    approve_btn = card.locator('[data-action="approve"]')
+    # Click approve in panel
     approve_btn.click()
     tester.page.wait_for_timeout(800)
 
-    # Card should be gone (permission resolved)
-    remaining = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id}"]')
-    if remaining.count() > 0:
-        print("❌ FAILED: Permission card still visible after approve")
+    # Panel should clear (or show next interaction)
+    # Check pending permissions via API
+    resp = requests.get(f"{BASE_URL}/hook/pending?session_id={tester.session_id}")
+    pending = resp.json()
+    still_pending = any(p['tool_use_id'] == tool_use_id for p in pending)
+
+    if still_pending:
+        print("❌ FAILED: Permission still pending after approve")
         return False
 
-    print("✅ PASSED: Permission approve works")
+    print("✅ PASSED: Permission approve works via panel")
     return True
 
 
 def test_permission_deny(tester):
-    """Test permission card deny button."""
+    """Test permission deny via panel."""
     print("\n=== TEST: Permission Deny ===")
 
     tool_use_id = f"toolu_deny_{int(time.time())}"
@@ -518,28 +557,35 @@ def test_permission_deny(tester):
     requests.post(f"{BASE_URL}/dev/inject/{tester.session_id}", json=payload)
     tester.page.wait_for_timeout(500)
 
-    card = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id}"]')
-    if card.count() == 0:
-        print("❌ FAILED: Permission card not rendered")
+    # Verify panel shows
+    if not tester.panel_visible():
+        print("❌ FAILED: Interaction panel not visible for permission")
         return False
 
-    # Click deny
-    deny_btn = card.locator('[data-action="deny"]')
+    # Click deny in panel
+    deny_btn = tester.page.locator('#interaction-panel [data-action="perm-deny"]')
+    if deny_btn.count() == 0:
+        print("❌ FAILED: Panel deny button not found")
+        return False
+
     deny_btn.click()
     tester.page.wait_for_timeout(800)
 
-    # Card should be gone
-    remaining = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id}"]')
-    if remaining.count() > 0:
-        print("❌ FAILED: Permission card still visible after deny")
+    # Check permission is resolved
+    resp = requests.get(f"{BASE_URL}/hook/pending?session_id={tester.session_id}")
+    pending = resp.json()
+    still_pending = any(p['tool_use_id'] == tool_use_id for p in pending)
+
+    if still_pending:
+        print("❌ FAILED: Permission still pending after deny")
         return False
 
-    print("✅ PASSED: Permission deny works")
+    print("✅ PASSED: Permission deny works via panel")
     return True
 
 
 def test_multiple_pending_permissions(tester):
-    """Test multiple pending permissions render and resolve independently."""
+    """Test multiple pending permissions are queued and handled sequentially."""
     print("\n=== TEST: Multiple Pending Permissions ===")
 
     tool_use_id_1 = f"toolu_multi1_{int(time.time())}"
@@ -561,34 +607,41 @@ def test_multiple_pending_permissions(tester):
 
     tester.page.wait_for_timeout(500)
 
-    # Both should be visible
-    card1 = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id_1}"]')
-    card2 = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id_2}"]')
-
-    if card1.count() == 0 or card2.count() == 0:
-        print(f"❌ FAILED: Expected 2 cards, found {card1.count()} and {card2.count()}")
+    # Panel should show first permission
+    if not tester.panel_visible():
+        print("❌ FAILED: Panel not visible for permissions")
         return False
 
-    # Approve first, verify second remains
-    card1.locator('[data-action="approve"]').click()
+    # Check both are pending via API
+    resp = requests.get(f"{BASE_URL}/hook/pending?session_id={tester.session_id}")
+    pending = resp.json()
+    pending_ids = [p['tool_use_id'] for p in pending]
+
+    if tool_use_id_1 not in pending_ids or tool_use_id_2 not in pending_ids:
+        print(f"❌ FAILED: Expected 2 pending permissions, found {len(pending)}")
+        return False
+
+    # Approve first via panel
+    approve_btn = tester.page.locator('#interaction-panel [data-action="perm-approve"]')
+    approve_btn.click()
     tester.page.wait_for_timeout(500)
 
-    card1_after = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id_1}"]')
-    card2_after = tester.page.locator(f'.permission-card[data-tool-use-id="{tool_use_id_2}"]')
+    # Second should now be shown (or queue continues)
+    resp = requests.get(f"{BASE_URL}/hook/pending?session_id={tester.session_id}")
+    pending = resp.json()
 
-    if card1_after.count() > 0:
-        print("❌ FAILED: First card not removed after approve")
+    if any(p['tool_use_id'] == tool_use_id_1 for p in pending):
+        print("❌ FAILED: First permission still pending after approve")
         return False
 
-    if card2_after.count() == 0:
-        print("❌ FAILED: Second card incorrectly removed")
-        return False
+    # Clean up - approve remaining
+    if tester.panel_visible():
+        approve_btn = tester.page.locator('#interaction-panel [data-action="perm-approve"]')
+        if approve_btn.count() > 0:
+            approve_btn.click()
+            tester.page.wait_for_timeout(300)
 
-    # Clean up - approve second
-    card2_after.locator('[data-action="approve"]').click()
-    tester.page.wait_for_timeout(300)
-
-    print("✅ PASSED: Multiple permissions handled independently")
+    print("✅ PASSED: Multiple permissions queued and handled sequentially")
     return True
 
 

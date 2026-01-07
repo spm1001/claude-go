@@ -447,16 +447,10 @@ button {
   border-radius: var(--border-radius);
   text-align: left;
   min-height: var(--tap-target);
+  cursor: default; /* Read-only context, not interactive */
 }
 
-.ask-user-question .question-option:hover {
-  border-color: var(--warning);
-  background: var(--bg-primary);
-}
-
-.ask-user-question .question-option:active {
-  transform: scale(0.98);
-}
+/* Inline question options are read-only (no hover/active effects) */
 
 .ask-user-question .option-label {
   font-weight: 500;
@@ -579,6 +573,7 @@ button {
   font-weight: 500;
   border-radius: var(--border-radius);
   font-size: var(--font-size-base);
+  cursor: default; /* Read-only context, not interactive */
 }
 
 .exit-plan-mode .plan-btn.approve {
@@ -586,28 +581,12 @@ button {
   color: white;
 }
 
-.exit-plan-mode .plan-btn.approve:hover {
-  background: #16a34a;
-}
-
-.exit-plan-mode .plan-btn.approve:active {
-  transform: scale(0.98);
-}
+/* Inline plan buttons are read-only (no hover/active effects) */
 
 .exit-plan-mode .plan-btn.reject {
   background: var(--bg-secondary);
   color: var(--text-primary);
   border: 1px solid var(--border);
-}
-
-.exit-plan-mode .plan-btn.reject:hover {
-  background: var(--error);
-  color: white;
-  border-color: var(--error);
-}
-
-.exit-plan-mode .plan-btn.reject:active {
-  transform: scale(0.98);
 }
 
 /* Answered plans - disable interaction */
@@ -877,113 +856,6 @@ button {
   color: white;
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--border-radius);
-}
-
-/* ==========================================================================
-   Permission Banner
-   ========================================================================== */
-
-.permission-banner {
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  padding: var(--space-md);
-  max-height: 40vh;
-  overflow-y: auto;
-}
-
-.permission-banner.hidden {
-  display: none;
-}
-
-.permission-card {
-  background: var(--bg-tertiary);
-  border: 2px solid var(--warning);
-  border-radius: var(--border-radius-lg);
-  padding: var(--space-md);
-  margin-bottom: var(--space-md);
-  animation: pulse 2s infinite;
-}
-
-.permission-card:last-child {
-  margin-bottom: 0;
-}
-
-@keyframes pulse {
-  0%, 100% { border-color: var(--warning); }
-  50% { border-color: rgba(245, 158, 11, 0.5); }
-}
-
-.permission-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-sm);
-}
-
-.permission-tool {
-  font-weight: 600;
-  color: var(--warning);
-  font-size: var(--font-size-lg);
-}
-
-.permission-time {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.permission-preview {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
-  background: var(--bg-primary);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--border-radius);
-  margin-bottom: var(--space-md);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.permission-actions {
-  display: flex;
-  gap: var(--space-md);
-}
-
-.permission-btn {
-  flex: 1;
-  min-height: var(--tap-target);
-  font-weight: 500;
-  border-radius: var(--border-radius);
-  font-size: var(--font-size-base);
-}
-
-.permission-btn.approve {
-  background: var(--success);
-  color: white;
-}
-
-.permission-btn.approve:hover {
-  background: #16a34a;
-}
-
-.permission-btn.approve:active {
-  transform: scale(0.98);
-}
-
-.permission-btn.deny {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-}
-
-.permission-btn.deny:hover {
-  background: var(--error);
-  color: white;
-  border-color: var(--error);
-}
-
-.permission-btn.deny:active {
-  transform: scale(0.98);
 }
 
 /* ==========================================================================

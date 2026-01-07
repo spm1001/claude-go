@@ -22,7 +22,6 @@ const state = {
   pendingPermissions: new Map(), // tool_use_id -> permission data
   answeredQuestions: new Set(),  // question IDs that have been answered
   respondingPermissions: new Set(), // permission IDs with in-flight responses
-  loadingQuestions: new Set(), // question IDs with in-flight responses (for loading state)
   // Bottom panel interaction state
   currentInteraction: null, // { type, tool_use_id, questions, currentIndex, answers, multiSelectState }
 };
@@ -110,7 +109,6 @@ function connectWebSocket(sessionId) {
       const res = await fetch(`/hook/pending?session_id=${sessionId}`);
       const pending = await res.json();
       pending.forEach(p => state.pendingPermissions.set(p.tool_use_id, p));
-      renderPermissionBanner();
     } catch (err) {
       console.error('Error fetching pending permissions:', err);
     }
@@ -591,8 +589,7 @@ function autoResize(textarea) {
 function handlePermissionRequest(permission) {
   console.log('Permission request:', permission);
   state.pendingPermissions.set(permission.tool_use_id, permission);
-  renderPermissionBanner();
-  // Also show in bottom panel (takes priority)
+  // Show in bottom panel
   checkForPendingInteractions();
 }
 
@@ -602,7 +599,6 @@ function handlePermissionRequest(permission) {
 function handlePermissionResolved(data) {
   console.log('Permission resolved:', data);
   state.pendingPermissions.delete(data.tool_use_id);
-  renderPermissionBanner();
   // Clear from bottom panel if it was showing this permission
   if (state.currentInteraction?.tool_use_id === data.tool_use_id) {
     clearInteractionPanel();
@@ -611,51 +607,6 @@ function handlePermissionResolved(data) {
   checkForPendingInteractions();
 }
 
-/**
- * Render the permission banner showing pending approvals
- */
-function renderPermissionBanner() {
-  // Get or create permission banner container
-  let banner = document.getElementById('permission-banner');
-  if (!banner) {
-    banner = document.createElement('div');
-    banner.id = 'permission-banner';
-    banner.className = 'permission-banner';
-    // Insert at top of chat view
-    const chatView = document.getElementById('chat-view');
-    chatView.insertBefore(banner, chatView.firstChild.nextSibling);
-  }
-
-  // If no pending permissions, hide banner
-  if (state.pendingPermissions.size === 0) {
-    banner.classList.add('hidden');
-    banner.innerHTML = '';
-    return;
-  }
-
-  // Render permission cards
-  banner.classList.remove('hidden');
-  banner.innerHTML = Array.from(state.pendingPermissions.values()).map(p => {
-    const inputPreview = formatToolInput(p.tool_name, p.tool_input);
-    return `
-      <div class="permission-card" data-tool-use-id="${p.tool_use_id}" data-session-id="${p.session_id}">
-        <div class="permission-header">
-          <span class="permission-tool">${escapeHtml(p.tool_name)}</span>
-          <span class="permission-time">${formatTime(p.received_at)}</span>
-        </div>
-        <div class="permission-preview">${escapeHtml(inputPreview)}</div>
-        <div class="permission-actions">
-          <button class="permission-btn approve" data-action="approve">
-            Approve
-          </button>
-          <button class="permission-btn deny" data-action="deny">
-            Deny
-          </button>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
 
 /**
  * Format tool input for display
@@ -703,7 +654,6 @@ async function respondToPermission(toolUseId, sessionId, approved) {
         alert('Session not found. This Claude session may have been started outside Claude Go.');
         // Still remove from UI since we can't handle it
         state.pendingPermissions.delete(toolUseId);
-        renderPermissionBanner();
         return;
       }
       throw new Error(data.error || 'Failed to send response');
@@ -711,7 +661,6 @@ async function respondToPermission(toolUseId, sessionId, approved) {
 
     // Remove from local state (server will also broadcast permission_resolved)
     state.pendingPermissions.delete(toolUseId);
-    renderPermissionBanner();
   } catch (err) {
     console.error('Error responding to permission:', err);
     alert('Failed to send permission response: ' + err.message);
@@ -1014,7 +963,6 @@ function handleDismiss() {
   } else if (interaction.type === 'permission') {
     // Remove from pending permissions
     state.pendingPermissions.delete(interaction.tool_use_id);
-    renderPermissionBanner();
   }
 
   clearInteractionPanel();
@@ -1117,147 +1065,9 @@ elements.messagesContainer.addEventListener('click', (e) => {
     return;
   }
 
-  // Question option (single select)
-  const selectBtn = target.closest('[data-action="select"]');
-  if (selectBtn) {
-    const question = selectBtn.closest('.ask-user-question');
-    const questionId = question?.dataset.questionId;
-    if (questionId && (state.answeredQuestions.has(questionId) || state.loadingQuestions.has(questionId))) return;
+  // Inline question and plan cards are read-only context.
+  // All interactions go through the bottom panel (interactionPanel).
 
-    const index = selectBtn.dataset.index;
-    if (index) {
-      if (questionId) {
-        state.loadingQuestions.add(questionId);
-        selectBtn.classList.add('loading');
-        selectBtn.disabled = true;
-      }
-      sendInput(index, 'answer'); // Use answer action: number + Tab + Enter
-      // Mark as answered after a short delay (will be confirmed when tool_result appears)
-      setTimeout(() => {
-        if (questionId) {
-          state.answeredQuestions.add(questionId);
-          state.loadingQuestions.delete(questionId);
-          question.classList.add('answered');
-        }
-      }, 500);
-    }
-    return;
-  }
-
-  // Question option (multi-select toggle)
-  const toggleBtn = target.closest('[data-action="toggle"]');
-  if (toggleBtn) {
-    const question = toggleBtn.closest('.ask-user-question');
-    const questionId = question?.dataset.questionId;
-    if (questionId && state.answeredQuestions.has(questionId)) return; // Already answered
-
-    toggleBtn.classList.toggle('selected');
-    return;
-  }
-
-  // Multi-select submit
-  const submitBtn = target.closest('[data-action="submit-multi"]');
-  if (submitBtn) {
-    const question = submitBtn.closest('.ask-user-question');
-    const questionId = question?.dataset.questionId;
-    if (questionId && (state.answeredQuestions.has(questionId) || state.loadingQuestions.has(questionId))) return;
-
-    const selected = question.querySelectorAll('.question-option.selected');
-    const indices = Array.from(selected).map(b => b.dataset.index);
-
-    if (questionId) {
-      state.loadingQuestions.add(questionId);
-      submitBtn.classList.add('loading');
-      submitBtn.disabled = true;
-    }
-
-    if (indices.length === 0) {
-      sendInput('', 'answer-multi');  // Empty selection still needs Tab+Enter
-    } else {
-      sendInput(indices.join(','), 'answer-multi');  // Toggle each, then Tab+Enter
-    }
-
-    setTimeout(() => {
-      if (questionId) {
-        state.answeredQuestions.add(questionId);
-        state.loadingQuestions.delete(questionId);
-        question.classList.add('answered');
-      }
-    }, 500);
-    return;
-  }
-
-  // Approve plan (ExitPlanMode)
-  const approvePlanBtn = target.closest('[data-action="approve-plan"]');
-  if (approvePlanBtn) {
-    const planBlock = approvePlanBtn.closest('.exit-plan-mode');
-    const planId = planBlock?.dataset.planId;
-    if (planId && (state.answeredQuestions.has(planId) || state.loadingQuestions.has(planId))) return;
-
-    if (planId) {
-      state.loadingQuestions.add(planId);
-      approvePlanBtn.classList.add('loading');
-      approvePlanBtn.disabled = true;
-    }
-    sendInput('y', null); // 'y' confirms plan
-    setTimeout(() => {
-      if (planId) {
-        state.answeredQuestions.add(planId);
-        state.loadingQuestions.delete(planId);
-        planBlock.classList.add('answered');
-      }
-    }, 500);
-    return;
-  }
-
-  // Reject plan (ExitPlanMode)
-  const rejectPlanBtn = target.closest('[data-action="reject-plan"]');
-  if (rejectPlanBtn) {
-    const planBlock = rejectPlanBtn.closest('.exit-plan-mode');
-    const planId = planBlock?.dataset.planId;
-    if (planId && (state.answeredQuestions.has(planId) || state.loadingQuestions.has(planId))) return;
-
-    if (planId) {
-      state.loadingQuestions.add(planId);
-      rejectPlanBtn.classList.add('loading');
-      rejectPlanBtn.disabled = true;
-    }
-    sendInput('n', null); // 'n' rejects plan
-    setTimeout(() => {
-      if (planId) {
-        state.answeredQuestions.add(planId);
-        state.loadingQuestions.delete(planId);
-        planBlock.classList.add('answered');
-      }
-    }, 500);
-    return;
-  }
-
-});
-
-// Event delegation for permission banner (approve/deny) - legacy, keeping for now
-document.addEventListener('click', (e) => {
-  const target = e.target;
-
-  // Approve permission (legacy banner)
-  const approveBtn = target.closest('.permission-card [data-action="approve"]');
-  if (approveBtn) {
-    const card = approveBtn.closest('.permission-card');
-    if (card) {
-      respondToPermission(card.dataset.toolUseId, card.dataset.sessionId, true);
-    }
-    return;
-  }
-
-  // Deny permission (legacy banner)
-  const denyBtn = target.closest('.permission-card [data-action="deny"]');
-  if (denyBtn) {
-    const card = denyBtn.closest('.permission-card');
-    if (card) {
-      respondToPermission(card.dataset.toolUseId, card.dataset.sessionId, false);
-    }
-    return;
-  }
 });
 
 // Event delegation for interaction panel
@@ -1296,7 +1106,6 @@ elements.interactionPanel?.addEventListener('click', (e) => {
       sendInput('3', null);
       state.pendingPermissions.delete(interaction.tool_use_id);
       clearInteractionPanel();
-      renderPermissionBanner(); // Update legacy banner too
     }
     return;
   }

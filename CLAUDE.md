@@ -124,6 +124,14 @@ Mobile UI tap → server sends: tmux send-keys "1" Enter
 
 **Deployment requirement:** The hook must be registered in `~/.claude/settings.json` on kube.lan (where Claude sessions run). Project-level hooks don't work — must be global.
 
+**Hook locations:**
+| Location | Has hook? | Implication |
+|----------|-----------|-------------|
+| Laptop (`~/.claude/settings.json`) | No | Local dev/testing unaffected by hook |
+| kube.lan (`~/.claude/settings.json`) | Yes | Fishbowl Claudes on kube.lan fire hooks |
+
+**Testing implication:** Local testing (laptop) doesn't have hook contamination — the developer Claude's tool calls don't trigger Claude Go notifications. For integration testing with hooks, use kube.lan.
+
 ## Hooks Gotchas
 
 **Project-level hooks don't work.** `.claude/settings.json` in a project directory is ignored for hooks. Must use `~/.claude/settings.json`.
@@ -225,6 +233,19 @@ HOST=127.0.0.1 npm run dev
 ```
 
 **Path note:** `/tmp` now works (symlinks resolved). Sandboxes can be anywhere.
+
+### Testing Layers
+
+| Layer | Tool | What It Tests | Claude Needed? |
+|-------|------|---------------|----------------|
+| **UI rendering** | `POST /dev/inject/:id` + Playwright | Does correct HTML appear? | No |
+| **Button clicks** | Playwright `.click()` + API spy | Does clicking call correct endpoint? | No |
+| **Keystroke delivery** | Real fishbowl session | Does `/api/sessions/:id/input` reach tmux? | Yes |
+| **Full flow** | Real fishbowl on kube.lan | Does Claude respond via hooks? | Yes |
+
+**Mock testing:** The `/dev/inject/:sessionId` endpoint injects fake messages/questions/permissions without needing a real Claude. Use for UI regression tests.
+
+**Hook testing:** Requires kube.lan (where hook is installed). Local testing doesn't exercise the permission hook flow.
 
 ## Related
 
