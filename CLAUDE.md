@@ -47,6 +47,21 @@ Deployed as systemd service on kube.lan, accessible via Tailscale:
 - URL: `http://kube.atlas-cloud.ts.net:7682`
 - Service: `/etc/systemd/system/claude-go.service`
 
+**CRITICAL: Deployment path is `~/Repos/claude-go` NOT `~/claude-go`**
+
+The service runs from `/home/modha/Repos/claude-go`. An orphan `~/claude-go` directory exists from a past rsync mistake — deploying there does nothing.
+
+```bash
+# CORRECT deployment
+scp file.js kube.lan:~/Repos/claude-go/path/to/file.js
+
+# WRONG (orphan directory, service doesn't see it)
+scp file.js kube.lan:~/claude-go/path/to/file.js
+
+# Verify you're in the right place
+ssh kube.lan "head -1 ~/Repos/claude-go/public/app.js"
+```
+
 ## Session Management
 
 - Sessions are tmux sessions named `claude-<uuid>`

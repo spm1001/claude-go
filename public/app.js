@@ -1,3 +1,4 @@
+// THIS IS THE ONE TRUE VERSION - 2026-01-08 20:45
 /**
  * Claude Go - Client Application
  *
@@ -137,8 +138,12 @@ async function fetchSessionContent(sessionId) {
 }
 
 async function sendInput(text, action) {
+  console.log(`[sendInput] text="${text}" action="${action}" ws=${state.ws?.readyState}`);
   if (state.ws && state.ws.readyState === WebSocket.OPEN) {
     state.ws.send(JSON.stringify({ type: 'input', text, action }));
+    console.log(`[sendInput] SENT via WebSocket`);
+  } else {
+    console.log(`[sendInput] WebSocket not open! state=${state.ws?.readyState}`);
   }
 }
 
@@ -564,14 +569,17 @@ function scrollToBottom() {
 function handleSend() {
   const text = elements.messageInput.value.trim();
   const interaction = state.currentInteraction;
+  console.log(`[handleSend] text="${text}" interaction=${interaction?.type || 'none'}`);
 
   // Handle contextual submit based on current interaction
   if (interaction) {
     if (interaction.type === 'question') {
       // "Other..." or "Submit" for questions
       const question = interaction.questions[interaction.currentIndex];
+      console.log(`[handleSend] question multiSelect=${question.multiSelect}`);
       if (question.multiSelect) {
         // Multi-select: submit selections (and typed text if any)
+        console.log(`[handleSend] calling submitQuestionAnswer`);
         submitQuestionAnswer(text || null);
       } else if (text) {
         // Single-select with typed text: send as "Other"
@@ -960,12 +968,20 @@ function submitQuestionAnswer(answer) {
 
   // Mark question as answered (updates both state and DOM)
   const questionId = `q-${interaction.tool_use_id}-${interaction.currentIndex}`;
-  markQuestionAnswered(questionId);
+  console.log(`[submit] About to markQuestionAnswered: ${questionId}`);
+  try {
+    markQuestionAnswered(questionId);
+    console.log(`[submit] markQuestionAnswered succeeded`);
+  } catch (e) {
+    console.error(`[submit] markQuestionAnswered FAILED:`, e);
+  }
 
   // Send the answer
   // For typed text (not a number), send directly without 'answer' action
   const isTypedText = isNaN(parseInt(answer, 10));
+  console.log(`[submit] isMultiSelect=${isMultiSelect} isTypedText=${isTypedText} answer="${answer}"`);
   if (isMultiSelect) {
+    console.log(`[submit] Calling sendInput for multiselect`);
     sendInput(answer, 'answer-multi');
   } else if (isTypedText) {
     // Typed "Other" response - need to select option N+1 (Type something), type text, submit
@@ -1101,6 +1117,7 @@ function formatTime(timestamp) {
 // Event delegation for messages container (questions, copy buttons)
 elements.messagesContainer.addEventListener('click', (e) => {
   const target = e.target;
+  console.log(`[messagesContainer click] target=${target.tagName} action=${target.dataset?.action || target.closest('[data-action]')?.dataset?.action || 'none'}`);
 
   // Copy button
   const copyBtn = target.closest(`[data-action="${ACTIONS.COPY}"]`);
@@ -1121,6 +1138,7 @@ elements.messagesContainer.addEventListener('click', (e) => {
 // Event delegation for interaction panel
 elements.interactionPanel?.addEventListener('click', (e) => {
   const target = e.target;
+  console.log(`[panel click] target=${target.tagName} action=${target.dataset?.action || target.closest('[data-action]')?.dataset?.action || 'none'}`);
 
   // Dismiss button
   if (target.closest(`[data-action="${ACTIONS.DISMISS}"]`)) {

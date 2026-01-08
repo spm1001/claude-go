@@ -435,6 +435,7 @@ wss.on('connection', (ws, req) => {
 
         case 'input':
           // Send input to Claude via tmux
+          console.log(`[WS input] session=${sessionId} text="${msg.text}" action="${msg.action}"`);
           await require('./lib/sessions').sendInput(
             sessionId,
             msg.text,
