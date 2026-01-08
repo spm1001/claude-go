@@ -929,6 +929,7 @@ function handleOptionSelect(index) {
   if (question.multiSelect) {
     // Toggle selection
     interaction.multiSelectState[index] = !interaction.multiSelectState[index];
+    console.log('[multiselect] Toggled index', index, '→', interaction.multiSelectState[index], 'State now:', JSON.stringify(interaction.multiSelectState));
     renderInteractionPanel();
   } else {
     // Single select - send immediately
@@ -949,10 +950,12 @@ function submitQuestionAnswer(answer) {
 
   // For multi-select, build answer from selected options
   if (isMultiSelect && !answer) {
+    console.log('[multiselect] Building answer from state:', JSON.stringify(interaction.multiSelectState));
     const selected = Object.entries(interaction.multiSelectState)
       .filter(([_, v]) => v)
       .map(([k, _]) => k);
     answer = selected.join(',');
+    console.log('[multiselect] Built answer:', answer);
   }
 
   // Mark question as answered (updates both state and DOM)
