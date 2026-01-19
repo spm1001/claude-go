@@ -297,6 +297,54 @@ Send via: `tmux send-keys -t {session} "1" Enter`
 
 ---
 
+## Critical: Output Capture Method
+
+**IMPORTANT (Jan 2026 discovery):** `tmux capture-pane` does NOT work for capturing Claude's interactive UI. Claude uses the alternate screen buffer which `capture-pane` misses entirely.
+
+### What doesn't work
+
+```bash
+# These return empty or minimal output:
+tmux capture-pane -t {session} -p           # Misses alternate screen
+tmux capture-pane -t {session} -p -a        # Returns "no alternate screen"
+```
+
+### What works
+
+```bash
+# Set up continuous capture to file
+tmux pipe-pane -t {session} "cat > /tmp/claude-output.txt"
+
+# Read captured output (use strings to filter escape codes)
+cat /tmp/claude-output.txt | strings | tail -100
+```
+
+### Why this matters for Claude Go
+
+- JSONL watching handles conversation history (what happened)
+- Hooks handle permission notifications (what's happening now)
+- But if you need to **read Claude's current screen state** (e.g., for debugging, for capturing what prompt is showing), you must use `pipe-pane`
+
+### Additional tmux requirements
+
+When running Claude in a tmux session on a remote machine (e.g., sprites):
+
+1. **NVM must be sourced** before running `claude`:
+   ```bash
+   tmux send-keys -t {session} 'export NVM_DIR="/.sprite/languages/node/nvm" && . "$NVM_DIR/nvm.sh" && nvm use default' Enter
+   sleep 3
+   tmux send-keys -t {session} "claude" Enter
+   ```
+
+2. **TERM should be set** for proper rendering:
+   ```bash
+   tmux send-keys -t {session} "export TERM=xterm-256color" Enter
+   ```
+
+3. **OAuth tokens may expire** — use `CLAUDE_CODE_OAUTH_TOKEN` env var or run `claude setup-token`
+
+---
+
 ## Implementation checklist
 
 ### Already working
