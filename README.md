@@ -1,4 +1,6 @@
-# Claude Go
+# Claude Go (Archived)
+
+> **This project has been superseded by [Guéridon](../gueridon).** Claude-go proved the concept and found the landmines. Guéridon rebuilt on better foundations (`claude -p` with JSON stdin/stdout instead of tmux scraping). This repo is kept as read-only history. Hard-won lessons have been documented in `gueridon/docs/lessons-from-claude-go.md`.
 
 Self-hosted Claude Code web client. Start tasks on your phone, continue on your desktop.
 
